@@ -257,9 +257,3 @@ export default function SearchPagePageWrapper() {
     </Suspense>
   );
 }
-```
-
-
-    git add .
-    git commit -m "Fix build error search page"
-    git push origin main
