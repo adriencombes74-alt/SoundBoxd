@@ -5,54 +5,32 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Home() {
-  // --- LOGIQUE (Garde tout ce qui marche) ---
-  const [activeTab, setActiveTab] = useState<'popular' | 'recent' | 'following'>('popular');
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Données pour les sections
+  const [topAlbums, setTopAlbums] = useState<any[]>([]);
+  const [recentReviews, setRecentReviews] = useState<any[]>([]);
+  const [friendReviews, setFriendReviews] = useState<any[]>([]);
   const [myLikes, setMyLikes] = useState<Set<number>>(new Set());
-  const [limits, setLimits] = useState({ popular: 8, recent: 8, following: 8 });
 
-  // Modale
-  const [selectedReview, setSelectedReview] = useState<any | null>(null);
-  const [comments, setComments] = useState<any[]>([]);
-  const [likers, setLikers] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState("");
+  // Pagination spécifique pour les Top Albums
+  const [limitTopAlbums, setLimitTopAlbums] = useState(5);
 
-  useEffect(() => { checkUser(); fetchAllSections(); }, []);
+  const genres = ["Pop", "Hip-Hop", "Rock", "Alternative", "Indie", "Electronic", "Jazz", "R&B", "Metal", "Classical"];
 
-  // Rechargement intelligent quand on change d'onglet
   useEffect(() => {
-    const fetchTab = async () => {
-        setLoading(true);
-        let query = supabase.from('reviews').select('*');
-
-        if (activeTab === 'popular') {
-            query = query.order('like_count', { ascending: false });
-        } else if (activeTab === 'recent') {
-            query = query.order('created_at', { ascending: false });
-        } else if (activeTab === 'following' && user) {
-            const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
-            const ids = follows?.map((f: any) => f.following_id) || [];
-            if (ids.length === 0) {
-                setReviews([]); setLoading(false); return;
-            }
-            const { data: profiles } = await supabase.from('profiles').select('username').in('id', ids);
-            const usernames = profiles?.map((p: any) => p.username) || [];
-            query = query.in('user_name', usernames).order('created_at', { ascending: false });
-        }
-
-        const { data } = await query.limit(50);
-        setReviews(data || []);
-        setLoading(false);
-    };
-    fetchTab();
-  }, [activeTab, user]);
+    checkUser();
+    fetchData();
+  }, []);
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
-    if (user) fetchMyLikes(user.id);
+    if (user) {
+        fetchMyLikes(user.id);
+        fetchFriendReviews(user.id);
+    }
   };
 
   const fetchMyLikes = async (userId: string) => {
@@ -60,252 +38,253 @@ export default function Home() {
     if (data) setMyLikes(new Set(data.map((l: any) => l.review_id)));
   };
 
-  const fetchAllSections = async () => {
-    // Chargement initial (Populaire par défaut)
+  const fetchData = async () => {
     setLoading(true);
-    const { data } = await supabase.from('reviews').select('*').order('like_count', { ascending: false }).limit(50);
-    setReviews(data || []);
+    
+    // 1. CALCUL DES "TOP RATED ALBUMS"
+    // On en charge 50 pour avoir de la réserve pour le bouton "Voir plus"
+    const { data: allReviews } = await supabase
+      .from('reviews')
+      .select('*')
+      .not('rating', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (allReviews) {
+        const albumMap = new Map();
+        allReviews.forEach((review) => {
+            if (!albumMap.has(review.album_id)) {
+                albumMap.set(review.album_id, {
+                    id: review.album_id,
+                    name: review.album_name,
+                    artist: review.artist_name,
+                    image: review.album_image,
+                    totalRating: 0,
+                    count: 0
+                });
+            }
+            const album = albumMap.get(review.album_id);
+            album.totalRating += review.rating;
+            album.count += 1;
+        });
+
+        const sortedAlbums = Array.from(albumMap.values())
+            .map((a: any) => ({ ...a, average: a.totalRating / a.count }))
+            .sort((a, b) => b.average - a.average)
+            .slice(0, 20); // On garde les 20 meilleurs en mémoire
+
+        setTopAlbums(sortedAlbums);
+    }
+
+    // 2. RÉCENT
+    const { data: recData } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    setRecentReviews(recData || []);
+
     setLoading(false);
   };
 
-  const handleLike = async (review: any) => {
-    if (!user) return alert("Connectez-vous pour aimer !");
-    const isLiked = myLikes.has(review.id);
-    setReviews(reviews.map(r => r.id === review.id ? { ...r, like_count: isLiked ? (r.like_count - 1) : (r.like_count + 1) } : r));
+  const fetchFriendReviews = async (userId: string) => {
+    const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', userId);
+    const ids = follows?.map((f: any) => f.following_id) || [];
+    if (ids.length === 0) return;
+
+    const { data: profiles } = await supabase.from('profiles').select('username').in('id', ids);
+    const usernames = profiles?.map((p: any) => p.username) || [];
+
+    const { data: friendsData } = await supabase
+      .from('reviews')
+      .select('*')
+      .in('user_name', usernames)
+      .order('created_at', { ascending: false })
+      .limit(5);
     
-    if (isLiked) {
-        setMyLikes(prev => { const next = new Set(prev); next.delete(review.id); return next; });
-        await supabase.from('likes').delete().eq('user_id', user.id).eq('review_id', review.id);
-    } else {
-        setMyLikes(prev => new Set(prev).add(review.id));
-        await supabase.from('likes').insert({ user_id: user.id, review_id: review.id });
-    }
+    setFriendReviews(friendsData || []);
   };
 
-  const openModal = async (review: any) => {
-    setSelectedReview(review);
-    const { data: cData } = await supabase.from('comments').select('*, profiles(username, avatar_url)').eq('review_id', review.id).order('created_at', { ascending: true });
-    setComments(cData || []);
-    const { data: lData } = await supabase.from('likes').select('profiles(username)').eq('review_id', review.id);
-    // @ts-ignore
-    setLikers(lData?.map((l: any) => l.profiles) || []);
-  };
+  // Composant Carte de Critique
+  const ReviewCard = ({ review }: { review: any }) => (
+    <div className="group relative bg-[#121212] rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col h-full">
+        <Link href={`/album/${review.album_id}`} className="relative aspect-square overflow-hidden rounded-t-2xl">
+            <img 
+                src={review.album_image?.replace('100x100', '400x400')} 
+                className="w-full h-full object-cover transition duration-700 group-hover:scale-110" 
+            />
+            <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-[#00e054]">
+                ★ {review.rating}
+            </div>
+        </Link>
+        <div className="p-4 flex flex-col flex-1">
+            <h3 className="font-bold text-white text-sm truncate mb-1">{review.album_name}</h3>
+            <div className="mt-auto flex justify-between items-center pt-3 border-t border-white/5">
+                <Link href={`/user/${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-[8px] text-white">
+                        {review.user_name[0].toUpperCase()}
+                    </div>
+                    {review.user_name}
+                </Link>
+            </div>
+        </div>
+    </div>
+  );
 
-  const postComment = async () => {
-    if (!newComment.trim() || !user) return;
-    const { error } = await supabase.from('comments').insert({ user_id: user.id, review_id: selectedReview.id, content: newComment });
-    if (!error) {
-        setNewComment("");
-        const { data } = await supabase.from('comments').select('*, profiles(username, avatar_url)').eq('review_id', selectedReview.id).order('created_at', { ascending: true });
-        setComments(data || []);
-    }
-  };
+  // Composant Carte Album
+  const AlbumCard = ({ album, rank }: { album: any, rank: number }) => (
+    <Link href={`/album/${album.id}`} className="group relative block animate-in fade-in zoom-in duration-500">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-2xl shadow-lg bg-[#121212] mb-3 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-2">
+            <img 
+                src={album.image?.replace('100x100', '600x600')} 
+                alt={album.name} 
+                className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500 group-hover:scale-110"
+            />
+            <div className="absolute top-2 left-2 w-8 h-8 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
+                #{rank}
+            </div>
+            <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 to-transparent pt-10">
+                <div className="flex items-center gap-1 text-[#00e054] font-bold text-lg">
+                    <span>★</span> {album.average.toFixed(1)}
+                </div>
+            </div>
+        </div>
+        <h3 className="font-bold text-white truncate group-hover:text-[#00e054] transition">{album.name}</h3>
+        <p className="text-xs text-gray-500 truncate">{album.artist}</p>
+    </Link>
+  );
 
-  const loadMore = () => {
-    setLimits(prev => ({ ...prev, [activeTab]: prev[activeTab] + 8 }));
-  };
-
-  // --- DESIGN CINÉMATIQUE (Option 1) ---
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
       
-      {/* Background Glow (Lumière d'ambiance) */}
       <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
-      <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      {/* --- NAVBAR FLOTTANTE --- */}
+      {/* NAVBAR */}
       <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
         <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
             <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
             <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                {/* Onglet Recherche Explicite */}
-                <Link href="/search" className="hover:text-[#00e054] transition flex items-center gap-2 text-white">
+                <Link href="/search" className="hover:text-[#00e054] transition flex items-center gap-2">
                     <span className="text-lg">🔍</span> <span className="hidden sm:inline">Chercher</span>
                 </Link>
-                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline text-gray-300">Communauté</Link>
-                
+                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
                 {user ? (
-                    <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
-                        <span className="hidden sm:inline text-gray-300 group-hover:text-white">Mon Profil</span>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
+                    <Link href="/profile" className="flex items-center gap-2 pl-4 border-l border-white/10 hover:opacity-80 transition">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs">
                             {user.email[0].toUpperCase()}
                         </div>
                     </Link>
                 ) : (
-                    <Link href="/login" className="bg-white text-black px-5 py-2 rounded-full hover:bg-[#00e054] transition shadow-lg font-bold">
-                        Connexion
-                    </Link>
+                    <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
                 )}
             </div>
         </nav>
       </div>
 
-      {/* --- HERO SECTION (VISIBLE POUR TOUS) --- */}
-      <header className="relative pt-44 pb-20 px-6 flex flex-col items-center text-center z-10">
+      {/* HERO */}
+      <header className="relative pt-40 pb-10 px-6 flex flex-col items-center text-center z-10">
         <h1 className="text-5xl md:text-8xl font-black tracking-tight mb-6 leading-none text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
           VOTRE VIE EN <br/><span className="text-[#00e054]">MUSIQUE.</span>
         </h1>
-        <p className="text-lg text-gray-400 max-w-xl mb-10 font-light leading-relaxed">
-            Découvrez ce que vos amis écoutent. Notez vos albums favoris.<br/>Créez la discothèque ultime.
+        
+        {/* LA PHRASE D'ACCROCHE EST DE RETOUR ICI */}
+        <p className="text-lg text-gray-400 max-w-xl mb-8 font-light">
+            Notez vos albums, écrivez des critiques et découvrez de nouvelles pépites grâce à la communauté.
         </p>
         
-        {/* Onglets de Navigation (Style iOS) */}
-        <div className="bg-white/5 p-1 rounded-full inline-flex backdrop-blur-md border border-white/10 shadow-2xl">
-            {[
-                {id: 'popular', l: 'Populaire'}, 
-                {id: 'recent', l: 'Récent'}, 
-                {id: 'following', l: 'Amis', d: !user}
-            ].map((t) => (
-                (!t.d) && (
-                    <button 
-                        key={t.id} 
-                        onClick={() => setActiveTab(t.id as any)}
-                        className={`px-8 py-3 rounded-full text-sm font-bold transition-all duration-500 ${activeTab === t.id ? 'bg-[#00e054] text-black shadow-[0_0_30px_rgba(0,224,84,0.4)] scale-105' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        {t.l}
-                    </button>
-                )
-            ))}
+        <div className="w-full max-w-md relative group mb-8">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00e054] to-blue-600 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+            <Link href="/search" className="relative flex items-center bg-black rounded-full px-6 py-4 w-full hover:bg-[#111] transition">
+                <span className="text-gray-500 mr-3">🔍</span>
+                <span className="text-gray-400 text-sm">Chercher un album, un artiste...</span>
+            </Link>
         </div>
       </header>
 
-      {/* --- GRILLE DE CONTENU --- */}
-      <main className="max-w-7xl mx-auto px-6 pb-32 z-10 relative">
-        {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-pulse">
-                {[1,2,3,4].map(i => <div key={i} className="h-96 bg-white/5 rounded-3xl border border-white/5"></div>)}
-            </div>
-        ) : reviews.length === 0 ? (
-            <div className="text-center py-32 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
-                <p className="text-2xl text-gray-500 mb-4 font-light">C'est bien calme par ici...</p>
-                {activeTab === 'following' && <Link href="/community" className="text-[#00e054] hover:underline text-lg">Trouver des amis à suivre →</Link>}
-            </div>
-        ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {reviews.slice(0, limits[activeTab]).map((review) => (
-                    <div key={review.id} className="group relative bg-[#0a0a0a] rounded-4xl border border-white/5 hover:border-[#00e054]/30 transition-all duration-600 hover:-translate-y-2 hover:shadow-2xl overflow-hidden flex flex-col h-full">
-                        
-                        {/* Image Full Bleed avec effet */}
-                        <Link href={`/album/${review.album_id}`} className="block relative aspect-square overflow-hidden">
-                            <img 
-                                src={review.album_image?.replace('100x100', '600x600')} 
-                                className="w-full h-full object-cover transition duration-900 group-hover:scale-100 group-hover:brightness-100" 
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80" />
-                            
-                            <div className="absolute bottom-4 left-4 text-white flex items-center gap-2">
-                                <span className="text-[#00e054] text-2xl drop-shadow-md">★</span>
-                                <span className="font-black text-3xl drop-shadow-md">{review.rating}</span>
-                            </div>
-                        </Link>
-                        
-                        {/* Infos */}
-                        <div className="p-6 flex flex-col flex-1">
-                            <div className="mb-4">
-                                <h3 className="font-bold text-white text-lg mb-1 truncate leading-tight">{review.album_name}</h3>
-                                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">{review.artist_name}</p>
-                            </div>
-                            
-                            <div className="relative flex-1 mb-6">
-                                <span className="absolute -top-2 -left-1 text-4xl text-white/10 font-serif">“</span>
-                                <p className="text-gray-400 text-sm line-clamp-3 italic font-light pl-4">
-                                    {review.review_text}
-                                </p>
-                            </div>
-                            
-                            {/* Footer Carte */}
-                            <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto">
-                                <Link href={`/user/${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition group/user">
-                                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-800 to-gray-600 flex items-center justify-center text-[9px] border border-white/10 group-hover/user:border-[#00e054] transition">
-                                        {review.user_name[0].toUpperCase()}
-                                    </div>
-                                    {review.user_name}
-                                </Link>
-
-                                <div className="flex gap-4 text-xs font-medium">
-                                    <button onClick={() => handleLike(review)} className={`flex items-center gap-1 transition ${myLikes.has(review.id) ? 'text-pink-500 scale-110' : 'text-gray-600 hover:text-white'}`}>
-                                        <span className="text-lg">{myLikes.has(review.id) ? '♥' : '♡'}</span> {review.like_count || 0}
-                                    </button>
-                                    <button onClick={() => openModal(review)} className="text-gray-600 hover:text-[#00e054] transition text-lg">
-                                        💬
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+      <main className="max-w-7xl mx-auto px-6 py-8 relative z-10 space-y-20">
+        
+        {/* 1. GENRES */}
+        <section>
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <span className="w-2 h-2 bg-[#00e054] rounded-full"></span> Parcourir par Genre
+            </h2>
+            <div className="flex flex-wrap gap-3">
+                {genres.map((genre) => (
+                    <Link 
+                        key={genre}
+                        href={`/search?q=${genre}&type=album`} 
+                        className="px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-sm font-bold transition-all hover:scale-105 hover:shadow-lg hover:bg-[#202020]"
+                    >
+                        {genre}
+                    </Link>
                 ))}
             </div>
-        )}
+        </section>
 
-        {/* BOUTON CHARGER PLUS */}
-        {reviews.length > limits[activeTab] && (
-            <div className="mt-16 text-center">
-                <button 
-                    onClick={loadMore}
-                    className="px-10 py-4 rounded-full border border-white/10 hover:bg-white hover:text-black transition font-bold text-xs uppercase tracking-[0.2em] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] duration-300"
-                >
-                    Découvrir plus
-                </button>
+        {/* 2. LES MIEUX NOTÉS (AVEC BOUTON VOIR PLUS) */}
+        <section>
+            <div className="flex justify-between items-end mb-8 border-b border-white/10 pb-4">
+                <h2 className="text-3xl font-black text-white tracking-tight">🏆 Les Mieux Notés</h2>
+                <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">Top Albums</span>
             </div>
-        )}
-      </main>
-
-      {/* MODALE (Style Moderne) */}
-      {selectedReview && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setSelectedReview(null)} />
-            <div className="bg-[#121212] w-full max-w-2xl max-h-[85vh] rounded-[2rem] border border-white/10 relative z-10 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-                
-                <div className="p-8 border-b border-white/5 bg-[#181818] flex justify-between items-start">
-                    <div className="flex gap-6">
-                        <img src={selectedReview.album_image} className="w-24 h-24 rounded-xl shadow-2xl border border-white/10" />
-                        <div className="pt-1">
-                            <h2 className="text-2xl font-black text-white mb-1 leading-tight">{selectedReview.album_name}</h2>
-                            <p className="text-gray-400 text-sm mb-3 font-medium">Critique par <span className="text-white border-b border-[#00e054]">{selectedReview.user_name}</span></p>
-                            <div className="text-[#00e054] text-lg tracking-widest">{"★".repeat(selectedReview.rating)}</div>
-                        </div>
+            {topAlbums.length > 0 ? (
+                <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        {/* On coupe la liste selon la limite choisie */}
+                        {topAlbums.slice(0, limitTopAlbums).map((album, index) => (
+                            <AlbumCard key={album.id} album={album} rank={index + 1} />
+                        ))}
                     </div>
-                    <button onClick={() => setSelectedReview(null)} className="text-gray-500 hover:text-white text-3xl transition hover:rotate-90 duration-300">×</button>
-                </div>
-
-                <div className="p-8 border-b border-white/5 bg-[#121212]">
-                    <p className="text-xl text-gray-200 italic leading-relaxed font-light font-serif">"{selectedReview.review_text}"</p>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#0a0a0a]">
-                    <h4 className="text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Discussion</h4>
-                    {comments.length === 0 ? <p className="text-gray-700 italic text-sm">Soyez le premier à réagir.</p> : comments.map(c => (
-                        <div key={c.id} className="flex gap-4 group">
-                            <div className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400">
-                                {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
-                            </div>
-                            <div className="bg-[#181818] p-4 rounded-2xl rounded-tl-none border border-white/5 flex-1">
-                                <div className="flex items-baseline gap-3 mb-1">
-                                    <span className="text-sm font-bold text-white group-hover:text-[#00e054] transition">{c.profiles?.username || 'Inconnu'}</span>
-                                    <span className="text-[10px] text-gray-600 uppercase tracking-wide">{new Date(c.created_at).toLocaleDateString()}</span>
-                                </div>
-                                <p className="text-sm text-gray-400 leading-relaxed">{c.content}</p>
-                            </div>
+                    
+                    {/* LE BOUTON VOIR PLUS */}
+                    {limitTopAlbums < topAlbums.length && (
+                        <div className="mt-8 text-center">
+                            <button 
+                                onClick={() => setLimitTopAlbums(prev => prev + 5)}
+                                className="px-8 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-xs font-bold uppercase tracking-widest"
+                            >
+                                + Voir les {Math.min(5, topAlbums.length - limitTopAlbums)} suivants
+                            </button>
                         </div>
-                    ))}
-                </div>
+                    )}
+                </>
+            ) : (
+                <div className="text-gray-500 italic">Pas encore assez de notes pour le classement.</div>
+            )}
+        </section>
 
-                <div className="p-6 border-t border-white/5 bg-[#181818] flex gap-3">
-                    <input 
-                        type="text" 
-                        placeholder="Écrire un commentaire..." 
-                        className="flex-1 bg-[#0a0a0a] border border-gray-700 rounded-full px-6 py-4 text-white focus:border-[#00e054] outline-none text-sm transition focus:bg-black placeholder-gray-600"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && postComment()}
-                    />
-                    <button onClick={postComment} className="bg-[#00e054] text-black w-12 h-12 rounded-full flex items-center justify-center hover:scale-110 transition shadow-[0_0_20px_rgba(0,224,84,0.3)] text-xl">➤</button>
-                </div>
+        {/* 3. RÉCENT */}
+        <section>
+            <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
+                <h2 className="text-2xl font-black text-white tracking-tight">✨ Derniers Avis</h2>
             </div>
-        </div>
-      )}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                {loading ? [1,2,3,4,5].map(i => <div key={i} className="h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.map(r => <ReviewCard key={r.id} review={r} />)}
+            </div>
+        </section>
+
+        {/* 4. AMIS */}
+        {user && (
+            <section>
+                <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
+                    <h2 className="text-2xl font-black text-white tracking-tight">👥 Activité des Amis</h2>
+                </div>
+                {friendReviews.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        {friendReviews.map(r => <ReviewCard key={r.id} review={r} />)}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
+                        <p className="text-gray-500 mb-2">Vos amis n'ont rien posté récemment.</p>
+                        <Link href="/community" className="text-[#00e054] hover:underline font-bold text-sm">Trouver des gens à suivre →</Link>
+                    </div>
+                )}
+            </section>
+        )}
+
+      </main>
     </div>
   );
 }

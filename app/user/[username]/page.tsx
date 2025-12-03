@@ -1,18 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-// --- INSTRUCTIONS POUR VS CODE (LOCAL) ---
-// 1. Décommentez la ligne ci-dessous :
 import { supabase } from '@/lib/supabaseClient';
+import Link from 'next/link';
 
-// 2. Commentez ou supprimez tout le BLOC DE SIMULATION ci-dessous.
-
-// --- DÉBUT BLOC SIMULATION (Pour l'aperçu uniquement) ---
 export default function PublicProfilePage({ params }: { params: any }) {
-  // Gestion de la compatibilité Next.js 15 pour les params
   const [username, setUsername] = useState<string>("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  
+  // Données
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [lists, setLists] = useState<any[]>([]);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [reviewsCount, setReviewsCount] = useState(0);
+  
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Gestion Next.js 15
   useEffect(() => {
     if (params instanceof Promise) {
       params.then((p: any) => setUsername(decodeURIComponent(p.username)));
@@ -21,48 +27,53 @@ export default function PublicProfilePage({ params }: { params: any }) {
     }
   }, [params]);
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Charger les données dès qu'on a le username
   useEffect(() => {
     if (username) fetchData();
   }, [username]);
 
   const fetchData = async () => {
-    // 1. Qui visite ?
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
 
-    // 2. Qui est visité ? (Récupérer l'ID via le username)
-    // Note: ilike est insensible à la casse (DemoUser = demouser)
+    // 1. Récupérer le profil
     const { data: profileData, error } = await supabase
       .from('profiles')
       .select('*')
-      .ilike('username', username) 
+      .ilike('username', username)
       .single();
 
     if (error || !profileData) {
-      console.log("Profil introuvable ou erreur:", error);
       setLoading(false);
-      return; 
+      return;
     }
-
     setProfile(profileData);
 
-    // 3. Récupérer ses critiques
-    const { data: reviewsData } = await supabase
+    // 2. Récupérer les critiques (Journal)
+    const { data: reviewsData, count: revCount } = await supabase
       .from('reviews')
-      .select('*')
-      .eq('user_name', profileData.username)
-      .order('created_at', { ascending: false } as any);
+      .select('*', { count: 'exact' })
+      .eq('user_name', profileData.username) // Ou user_id si la migration est faite
+      .order('created_at', { ascending: false });
     
     setReviews(reviewsData || []);
+    setReviewsCount(revCount || 0);
 
-    // 4. Est-ce que je le suis déjà ?
+    // 3. Récupérer les listes
+    const { data: listsData } = await supabase
+      .from('lists')
+      .select('*')
+      .eq('user_id', profileData.id)
+      .order('created_at', { ascending: false });
+    setLists(listsData || []);
+
+    // 4. Récupérer le nombre d'abonnés
+    const { count: followCount } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', profileData.id);
+    setFollowersCount(followCount || 0);
+
+    // 5. Vérifier si je suis déjà abonné
     if (user && user.id !== profileData.id) {
       const { data: followData } = await supabase
         .from('follows')
@@ -70,166 +81,176 @@ export default function PublicProfilePage({ params }: { params: any }) {
         .eq('follower_id', user.id)
         .eq('following_id', profileData.id)
         .single();
-      
       setIsFollowing(!!followData);
     }
 
     setLoading(false);
   };
 
-  // --- ACTION SUIVRE / NE PLUS SUIVRE ---
   const handleFollowToggle = async () => {
     if (!currentUser) return alert("Connectez-vous pour suivre ce membre !");
     
-    // Optimisme : on change l'état visuel tout de suite
-    const previousState = isFollowing;
-    setIsFollowing(!isFollowing);
+    // Optimisme UI
+    const newIsFollowing = !isFollowing;
+    setIsFollowing(newIsFollowing);
+    setFollowersCount(prev => newIsFollowing ? prev + 1 : prev - 1);
 
-    if (previousState) {
-      // Désabonnement
-      const { error } = await supabase
-        .from('follows')
-        .delete()
-        .eq('follower_id', currentUser.id)
-        .eq('following_id', profile.id);
-        
-      if (error) {
-          setIsFollowing(previousState); // On annule si erreur
-          console.error(error);
-      }
+    if (isFollowing) {
+      await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', profile.id);
     } else {
-      // Abonnement
-      const { error } = await supabase
-        .from('follows')
-        .insert({
-          follower_id: currentUser.id,
-          following_id: profile.id
-        });
-
-      if (error) {
-          setIsFollowing(previousState);
-          console.error(error);
-      }
+      await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: profile.id });
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#14181c] text-white p-10 flex items-center justify-center">Chargement...</div>;
-  if (!profile) return <div className="min-h-screen bg-[#14181c] text-white p-10 flex items-center justify-center">Utilisateur introuvable.</div>;
+  if (loading) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Chargement...</div>;
+  if (!profile) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Utilisateur introuvable.</div>;
 
   return (
-    <div className="min-h-screen bg-[#14181c] text-white font-sans">
-      {/* NAVBAR */}
-      <nav className="flex items-center justify-between px-6 py-4 bg-[#2c3440] border-b border-gray-700">
-        <a href="/" className="text-2xl font-bold tracking-tighter uppercase">Music<span className="text-[#00e054]">Boxd</span></a>
-        <div className="flex space-x-6 text-sm font-semibold uppercase tracking-widest items-center">
-          <a href="/search" className="text-gray-300 hover:text-white transition">Albums</a>
-          <a href="/community" className="text-gray-300 hover:text-white transition">Communauté</a>
-          <a href="/profile" className="text-gray-300 hover:text-white transition">Mon Profil</a>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
+      
+      {/* --- GLOWS --- */}
+      <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      {/* EN-TÊTE PROFIL PUBLIC */}
-      <header className="bg-[#101317] border-b border-gray-800">
-        <div className="max-w-4xl mx-auto px-6 py-12 flex items-center gap-6">
-          {/* Avatar */}
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white border-4 border-[#14181c] overflow-hidden">
-            {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-                (profile.username && profile.username[0]) ? profile.username[0].toUpperCase() : '?'
-            )}
+      {/* --- NAVBAR FLOTTANTE --- */}
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
+        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
+                <Link href="/search" className="text-gray-300 hover:text-[#00e054] transition">Albums</Link>
+                <Link href="/community" className="text-gray-300 hover:text-[#00e054] transition">Communauté</Link>
+                {currentUser ? (
+                    <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
+                            {currentUser.email[0].toUpperCase()}
+                        </div>
+                    </Link>
+                ) : (
+                    <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
+                )}
+            </div>
+        </nav>
+      </div>
+
+      {/* --- HEADER PROFIL --- */}
+      <header className="relative pt-32 pb-12 px-6 z-10 border-b border-white/5 bg-[#0a0a0a]">
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center md:items-end gap-8">
+          <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-5xl font-bold text-white border-4 border-[#14181c] shadow-2xl overflow-hidden">
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" /> : (profile.username?.[0]?.toUpperCase() || '?')}
           </div>
           
-          <div className="flex-1">
-            <div className="flex justify-between items-start">
+          <div className="flex-1 text-center md:text-left w-full">
+             <div className="flex flex-col md:flex-row justify-between items-center md:items-end mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-1">{profile.username}</h1>
-                    <p className="text-gray-400 text-sm mb-4">Membre de la communauté</p>
+                    <h1 className="text-4xl md:text-5xl font-black text-white mb-2 tracking-tight">{profile.username}</h1>
+                    <p className="text-gray-400 text-sm">Membre de la communauté</p>
                 </div>
                 
-                {/* BOUTON SUIVRE (Caché si c'est mon propre profil) */}
+                {/* Bouton Suivre */}
                 {currentUser && currentUser.id !== profile.id && (
                     <button 
                         onClick={handleFollowToggle}
-                        className={`px-6 py-2 rounded font-bold text-sm transition uppercase tracking-widest ${
+                        className={`px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest transition shadow-lg mt-4 md:mt-0 ${
                             isFollowing 
-                            ? 'bg-transparent border border-gray-500 text-gray-400 hover:border-red-500 hover:text-red-500' 
-                            : 'bg-[#00e054] text-black hover:bg-[#00c04b]'
+                            ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-500' 
+                            : 'bg-[#00e054] text-black hover:bg-[#00c04b] hover:scale-105'
                         }`}
                     >
                         {isFollowing ? 'Abonné' : 'Suivre +'}
                     </button>
                 )}
-            </div>
-            
-            <div className="flex gap-6 text-sm">
-              <div className="text-center">
-                <span className="block font-bold text-white text-lg">{reviews.length}</span>
-                <span className="text-gray-500 uppercase text-xs">Avis</span>
-              </div>
-            </div>
+             </div>
+             
+             {/* Stats */}
+             <div className="flex justify-center md:justify-start gap-12 border-t border-white/5 pt-6">
+                <div className="text-center"><span className="block font-black text-2xl text-white">{reviewsCount}</span><span className="text-gray-500 uppercase text-[10px] tracking-widest font-bold">Critiques</span></div>
+                <div className="text-center"><span className="block font-black text-2xl text-white">{followersCount}</span><span className="text-gray-500 uppercase text-[10px] tracking-widest font-bold">Abonnés</span></div>
+                <div className="text-center"><span className="block font-black text-2xl text-white">{lists.length}</span><span className="text-gray-500 uppercase text-[10px] tracking-widest font-bold">Listes</span></div>
+             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-12">
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-16 relative z-10">
         
-        {/* TOP 5 ALBUMS (Lecture seule) */}
-        {profile.top_albums && profile.top_albums.length > 0 && (
+        {/* --- TOP 5 --- */}
+        <div className="grid grid-cols-1 gap-12">
+            {/* ALBUMS */}
+            {profile.top_albums && profile.top_albums.length > 0 && (
+                <section>
+                    <h2 className="text-sm font-bold text-[#00e054] uppercase tracking-widest mb-6 flex items-center gap-2"><span className="w-2 h-2 bg-[#00e054] rounded-full"></span> Albums Favoris</h2>
+                    <div className="grid grid-cols-5 gap-4">
+                        {profile.top_albums.map((item: any, i: number) => (
+                            <Link key={i} href={`/album/${item.id}`} className="group block relative aspect-square bg-black rounded-2xl border border-white/10 overflow-hidden shadow-lg hover:shadow-[#00e054]/20 transition duration-500">
+                                <img src={item.image} alt={item.name} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition duration-700" />
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* TITRES */}
+            {profile.top_songs && profile.top_songs.length > 0 && (
+                <section>
+                    <h2 className="text-sm font-bold text-[#00e054] uppercase tracking-widest mb-6 flex items-center gap-2"><span className="w-2 h-2 bg-[#00e054] rounded-full"></span> Titres Favoris</h2>
+                    <div className="grid grid-cols-5 gap-4">
+                        {profile.top_songs.map((item: any, i: number) => (
+                            <div key={i} className="group relative aspect-square bg-black rounded-full border border-white/10 overflow-hidden shadow-lg hover:shadow-[#00e054]/20 transition duration-500">
+                                <img src={item.image} alt={item.name} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition duration-700" />
+                                <div className="absolute bottom-2 right-2 bg-black/80 text-[#00e054] text-[10px] px-1.5 py-0.5 rounded-full font-bold">♫</div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+        </div>
+
+        {/* --- LISTES --- */}
+        {lists.length > 0 && (
             <section>
-                <div className="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
-                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Ses Albums Favoris</h2>
-                </div>
-                <div className="grid grid-cols-5 gap-4">
-                    {profile.top_albums.map((item: any, i: number) => (
-                        <div key={i} className="relative aspect-square bg-black rounded border border-gray-800" title={item.name}>
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded opacity-90 hover:opacity-100 transition" />
-                        </div>
+                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-white/10 pb-2">Listes Créées</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {lists.map((list) => (
+                        <Link key={list.id} href={`/lists/${list.id}`} className="group block">
+                            <div className="bg-[#121212] p-6 rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1">
+                                <h3 className="font-bold text-white text-lg mb-1 group-hover:text-[#00e054] transition">{list.title}</h3>
+                                <p className="text-xs text-gray-500 mb-4 line-clamp-1">{list.description}</p>
+                                <div className="flex gap-2 overflow-hidden">
+                                    {list.albums && list.albums.slice(0, 4).map((album: any, i:number) => (
+                                        <img key={i} src={album.image} className="w-10 h-10 rounded bg-black object-cover border border-white/10" />
+                                    ))}
+                                </div>
+                            </div>
+                        </Link>
                     ))}
                 </div>
             </section>
         )}
 
-        {/* TOP 5 CHANSONS (Lecture seule) */}
-        {profile.top_songs && profile.top_songs.length > 0 && (
-            <section>
-                <div className="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
-                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">Ses Titres Favoris</h2>
-                </div>
-                <div className="grid grid-cols-5 gap-4">
-                    {profile.top_songs.map((item: any, i: number) => (
-                        <div key={i} className="relative aspect-square bg-black rounded border border-gray-800" title={item.name}>
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded opacity-90 hover:opacity-100 transition" />
-                            <div className="absolute bottom-1 right-1 bg-black/80 px-1 rounded text-[10px] text-[#00e054]">♫</div>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        )}
-
-        {/* LISTE DES CRITIQUES */}
+        {/* --- JOURNAL --- */}
         <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest border-b border-gray-600 pb-2 mb-6">Journal Récent</h2>
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-white/10 pb-2">Dernières Critiques</h2>
             {reviews.length === 0 ? (
-                <p className="text-gray-500 italic">Cet utilisateur n'a pas encore posté de critique.</p>
+                <p className="text-gray-600 italic text-sm">Aucune critique pour le moment.</p>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-4">
                     {reviews.map((review) => (
-                    <div key={review.id} className="flex gap-4 bg-[#20262d] p-4 rounded-lg border border-gray-800">
-                        <a href={`/album/${review.album_id}`} className="flex-shrink-0 w-16 h-16 bg-black rounded overflow-hidden hover:opacity-80 transition">
-                            <img src={review.album_image} alt={review.album_name} className="w-full h-full object-cover" />
-                        </a>
-                        <div className="flex-1">
-                            <div className="font-bold text-white">{review.album_name}</div>
-                            <div className="text-[#00e054]">{"★".repeat(review.rating)}</div>
-                            <div className="text-gray-400 text-sm italic">"{review.review_text}"</div>
-                            <div className="mt-2 text-xs text-gray-600">Posté le {new Date(review.created_at).toLocaleDateString()}</div>
+                    <div key={review.id} className="flex gap-6 bg-[#121212] p-6 rounded-2xl border border-white/5 group hover:bg-[#181818] transition">
+                        <Link href={`/album/${review.album_id}`} className="flex-shrink-0 w-20 h-20 bg-black rounded-lg overflow-hidden shadow-lg">
+                            <img src={review.album_image} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                        </Link>
+                        <div className="flex-1 py-1">
+                            <div className="font-bold text-white text-lg mb-1">{review.album_name}</div>
+                            <div className="text-[#00e054] text-sm mb-3 tracking-widest">{"★".repeat(review.rating)}</div>
+                            <p className="text-gray-400 text-sm italic font-light">"{review.review_text}"</p>
+                            <div className="mt-3 text-xs text-gray-600">{new Date(review.created_at).toLocaleDateString()}</div>
                         </div>
                     </div>
                     ))}
                 </div>
             )}
         </section>
+
       </main>
     </div>
   );
