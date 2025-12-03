@@ -1,145 +1,175 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
-export default function ListDetailsPage({ params }: { params: any }) {
+export default function CreateListPage() {
   const router = useRouter();
-  const [listId, setListId] = useState<string>("");
-  const [list, setList] = useState<any>(null);
-  const [owner, setOwner] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  
+  // Recherche
+  const [query, setQuery] = useState("");
+  const [searchType, setSearchType] = useState<'album' | 'song'>('album'); // NOUVEAU : Choix du type
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (params instanceof Promise) {
-      params.then((p: any) => setListId(p.id));
-    } else {
-      setListId(params.id);
-    }
-  }, [params]);
+    checkUser();
+  }, []);
 
-  useEffect(() => {
-    if (listId) fetchListData();
-  }, [listId]);
-
-  const fetchListData = async () => {
+  const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUser(user);
+    if (!user) router.push('/login');
+  };
 
-    const { data: listData, error } = await supabase
-      .from('lists')
-      .select('*')
-      .eq('id', listId)
-      .single();
+  const searchItems = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setIsSearching(true);
 
-    if (error || !listData) {
-      setLoading(false);
-      return;
+    try {
+      // Recherche iTunes adaptée au type
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${searchType}&limit=5`);
+      const data = await res.json();
+      setSearchResults(data.results);
+    } catch (err) {
+      console.error(err);
     }
-    setList(listData);
+    setIsSearching(false);
+  };
 
-    const { data: ownerData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', listData.user_id)
-      .single();
+  const addItem = (item: any) => {
+    // L'ID unique dépend du type
+    const itemId = item.trackId || item.collectionId;
+    if (selectedItems.find(a => a.id === itemId)) return;
+
+    const cleanItem = {
+        id: itemId,
+        // Si c'est une chanson, on garde l'ID de l'album parent pour la redirection
+        targetId: item.collectionId || item.trackId, 
+        name: item.trackName || item.collectionName,
+        artist: item.artistName,
+        // On force la HD
+        image: item.artworkUrl100.replace('100x100', '1000x1000'),
+        type: searchType,
+        year: new Date(item.releaseDate).getFullYear()
+    };
     
-    setOwner(ownerData || { username: 'Inconnu' });
-    setLoading(false);
+    setSelectedItems([...selectedItems, cleanItem]);
+    setQuery("");
+    setSearchResults([]);
   };
 
-  const handleDelete = async () => {
-    if (!confirm("Supprimer cette liste ?")) return;
-    const { error } = await supabase.from('lists').delete().eq('id', listId);
-    if (!error) { router.push('/profile'); router.refresh(); }
+  const removeItem = (id: number) => {
+    setSelectedItems(selectedItems.filter(a => a.id !== id));
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert("Lien copié !");
-  };
+  const saveList = async () => {
+    if (!title.trim()) return alert("Donnez un titre !");
+    if (selectedItems.length === 0) return alert("Ajoutez au moins un élément !");
 
-  const handleEdit = async () => {
-    const newTitle = prompt("Nouveau titre :", list.title);
-    if (newTitle) {
-        const { error } = await supabase.from('lists').update({ title: newTitle }).eq('id', listId);
-        if (!error) setList({ ...list, title: newTitle });
+    setIsSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+        const { error } = await supabase.from('lists').insert({
+            user_id: user.id,
+            title: title,
+            description: description,
+            albums: selectedItems // On sauvegarde le tableau mixte
+        });
+
+        if (error) {
+            alert("Erreur lors de la création.");
+        } else {
+            alert("Liste créée !");
+            router.push('/profile');
+        }
     }
+    setIsSaving(false);
   };
-
-  if (loading) return <div className="min-h-screen bg-[#14181c] text-white p-10 flex items-center justify-center">Chargement...</div>;
-  if (!list) return <div className="min-h-screen bg-[#14181c] text-white p-10 flex items-center justify-center">Liste introuvable.</div>;
-
-  const mosaicAlbums = list.albums?.slice(0, 6) || [];
 
   return (
-    <div className="min-h-screen bg-[#14181c] text-white font-sans pb-20">
-      <nav className="flex items-center justify-between px-6 py-4 bg-[#2c3440] border-b border-gray-700 relative z-20">
-        <a href="/" className="text-2xl font-bold tracking-tighter uppercase">Music<span className="text-[#00e054]">Boxd</span></a>
-        <div className="flex space-x-6 text-sm font-semibold uppercase tracking-widest items-center">
-          <a href="/search" className="text-gray-300 hover:text-white transition">Albums</a>
-          <a href="/profile" className="text-gray-300 hover:text-white transition">Mon Profil</a>
+    <div className="min-h-screen bg-[#050505] text-white font-sans p-6 selection:bg-[#00e054] selection:text-black">
+      <div className="max-w-2xl mx-auto mt-20">
+        <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-black tracking-tight">Nouvelle Liste</h1>
+            <button onClick={() => router.back()} className="text-gray-400 hover:text-white">Annuler</button>
         </div>
-      </nav>
 
-      <header className="relative w-full overflow-hidden bg-[#101317] border-b border-gray-800">
-        <div className="absolute inset-0 grid grid-cols-3 md:grid-cols-6 opacity-30 blur-sm pointer-events-none">
-            {mosaicAlbums.map((item: any, i: number) => (
-                <img key={i} src={item.image} className="w-full h-full object-cover" />
-            ))}
+        <div className="space-y-6 mb-12">
+            <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Titre</label>
+                <input type="text" className="w-full bg-[#121212] border border-gray-800 rounded-xl p-4 text-white focus:border-[#00e054] outline-none text-lg font-bold" placeholder="Titre..." value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Description</label>
+                <textarea className="w-full bg-[#121212] border border-gray-800 rounded-xl p-4 text-white focus:border-[#00e054] outline-none h-32" placeholder="Description..." value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#14181c] via-[#14181c]/80 to-transparent"></div>
 
-        <div className="relative z-10 max-w-4xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-8 items-end">
-            <div className="flex-1">
-                <h4 className="text-gray-400 uppercase tracking-widest text-xs mb-2">Liste par <span className="text-white font-bold">{owner.username}</span></h4>
-                <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 leading-tight">{list.title}</h1>
-                <p className="text-gray-300 text-lg max-w-2xl">{list.description}</p>
-                <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
-                    <span>{list.albums?.length || 0} éléments</span>
-                    <span>•</span>
-                    <span>{new Date(list.created_at).toLocaleDateString()}</span>
-                </div>
+        <div className="mb-8">
+            <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Ajouter des éléments</label>
+            
+            {/* SÉLECTEUR TYPE */}
+            <div className="flex gap-2 mb-3">
+                <button onClick={() => setSearchType('album')} className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition ${searchType === 'album' ? 'bg-[#00e054] text-black' : 'bg-[#2c3440] text-gray-400'}`}>Albums</button>
+                <button onClick={() => setSearchType('song')} className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition ${searchType === 'song' ? 'bg-[#00e054] text-black' : 'bg-[#2c3440] text-gray-400'}`}>Titres</button>
             </div>
 
-            <div className="flex gap-3">
-                <button onClick={handleShare} className="px-4 py-2 bg-[#2c3440] hover:bg-[#384252] text-white rounded border border-gray-600 transition text-xs font-bold uppercase">Partager</button>
-                {currentUser && currentUser.id === list.user_id && (
-                    <>
-                        <button onClick={handleEdit} className="px-4 py-2 bg-[#2c3440] hover:bg-[#384252] text-white rounded border border-gray-600 transition text-xs font-bold uppercase">Modifier</button>
-                        <button onClick={handleDelete} className="px-4 py-2 bg-red-900/20 hover:bg-red-900/40 text-red-400 rounded border border-red-900/50 transition text-xs font-bold uppercase">Supprimer</button>
-                    </>
+            <form onSubmit={searchItems} className="flex gap-2 relative">
+                <input type="text" className="w-full bg-[#121212] border border-gray-800 rounded-xl p-4 text-white focus:border-[#00e054] outline-none" placeholder={`Chercher un ${searchType === 'album' ? 'album' : 'titre'}...`} value={query} onChange={(e) => setQuery(e.target.value)} />
+                <button type="submit" disabled={isSearching} className="bg-[#2c3440] px-6 rounded-xl font-bold text-gray-300 hover:bg-[#384252]">{isSearching ? '...' : '🔍'}</button>
+
+                {searchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 bg-[#1a1a1a] border border-gray-700 mt-2 rounded-xl shadow-2xl z-10 max-h-60 overflow-y-auto">
+                        {searchResults.map((item) => (
+                            <div key={item.collectionId || item.trackId} onClick={() => addItem(item)} className="flex items-center gap-3 p-3 hover:bg-[#00e054] hover:text-black cursor-pointer transition">
+                                <img src={item.artworkUrl100} className="w-10 h-10 rounded" alt="cover"/>
+                                <div>
+                                    <div className="font-bold text-sm">{item.trackName || item.collectionName}</div>
+                                    <div className="text-xs opacity-70">{item.artistName}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
-            </div>
+            </form>
         </div>
-      </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="space-y-4">
-            {list.albums?.map((item: any, index: number) => (
-                <Link key={index} href={`/album/${item.targetId || item.id}`} className="block group">
-                    <div className="flex items-center gap-6 p-4 rounded-lg hover:bg-[#20262d] border border-transparent hover:border-gray-700 transition">
-                        <div className="text-gray-600 font-mono text-xl w-8 text-center">{index + 1}</div>
-                        <div className="w-20 h-20 flex-shrink-0 shadow-lg group-hover:scale-105 transition transform relative">
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded" />
-                            {item.type === 'song' && <div className="absolute bottom-1 right-1 bg-black/80 text-[#00e054] text-[10px] px-1 rounded">♫</div>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-xl font-bold text-white group-hover:text-[#00e054] transition truncate">{item.name}</h3>
-                            <div className="flex items-center gap-2 text-gray-400 mt-1">
-                                <span>{item.artist}</span>
-                                {item.year && <><span className="text-gray-600">•</span><span className="text-gray-500">{item.year}</span></>}
+        <div className="space-y-2 mb-20">
+            {selectedItems.length === 0 ? (
+                <div className="text-center py-10 border-2 border-dashed border-gray-800 rounded-xl text-gray-600">Liste vide.</div>
+            ) : (
+                selectedItems.map((item, index) => (
+                    <div key={item.id} className="flex items-center justify-between bg-[#121212] p-3 rounded-xl border border-gray-800">
+                        <div className="flex items-center gap-4">
+                            <div className="text-gray-600 font-mono w-6 text-center">{index + 1}</div>
+                            <img src={item.image} className="w-12 h-12 rounded bg-black" alt="cover"/>
+                            <div>
+                                <div className="font-bold text-white flex items-center gap-2">
+                                    {item.name}
+                                    {item.type === 'song' && <span className="text-[9px] bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-gray-400 font-bold">SONG</span>}
+                                </div>
+                                <div className="text-xs text-gray-400">{item.artist} • {item.year}</div>
                             </div>
                         </div>
-                        <div className="text-gray-600 opacity-0 group-hover:opacity-100 transition pr-4">→</div>
+                        <button onClick={() => removeItem(item.id)} className="text-gray-500 hover:text-red-500 p-2">✕</button>
                     </div>
-                </Link>
-            ))}
+                ))
+            )}
         </div>
-      </main>
+
+        <div className="fixed bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+            <button onClick={saveList} disabled={isSaving || selectedItems.length === 0} className="pointer-events-auto bg-[#00e054] text-black font-bold px-12 py-4 rounded-full hover:bg-[#00c04b] disabled:opacity-50 transition transform hover:scale-105 shadow-[0_0_30px_rgba(0,224,84,0.3)]">
+                {isSaving ? 'Création...' : 'Publier la liste'}
+            </button>
+        </div>
+      </div>
     </div>
   );
 }
