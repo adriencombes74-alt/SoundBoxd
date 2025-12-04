@@ -42,7 +42,12 @@ export default function ProfilePage() {
     setTopAlbums(profileData.top_albums || []);
     setTopSongs(profileData.top_songs || []);
 
-    const { data: reviewsData } = await supabase.from('reviews').select('*').eq('user_name', profileData.username).order('created_at', { ascending: false } as any);
+    // 2. Critiques (CORRIGÉ : Recherche par ID stable)
+    const { data: reviewsData } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('user_id', userId) // <--- C'EST ICI LE CHANGEMENT IMPORTANT
+      .order('created_at', { ascending: false } as any);
     setReviews(reviewsData || []);
 
     const { data: listsData } = await supabase.from('lists').select('*').eq('user_id', userId).order('created_at', { ascending: false });

@@ -11,10 +11,11 @@ export default function AlbumPage({ params }: { params: any }) {
   const [album, setAlbum] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
   
-  // États Critiques & Données
+  // États Critiques
   const [reviews, setReviews] = useState<any[]>([]);
   const [displayedReviews, setDisplayedReviews] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
+  
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -64,21 +65,20 @@ export default function AlbumPage({ params }: { params: any }) {
         followingIds = follows?.map((f:any) => f.following_id) || [];
     }
 
-    // Récupération ROBUSTE (Jointure simple)
+    // 1. Récupération (Jointure simple pour robustesse)
     let { data, error } = await supabase
       .from('reviews')
       .select('*, profiles(id, username, avatar_url)') 
       .eq('album_id', id);
 
-    // Si la jointure échoue, on tente une récup simple
     if (error || !data) {
-        const simple = await supabase.from('reviews').select('*').eq('album_id', id);
-        data = simple.data;
+        const simpleRes = await supabase.from('reviews').select('*').eq('album_id', id);
+        data = simpleRes.data;
     }
 
     const allReviews = data || [];
 
-    // Tri : Amis en premier
+    // 2. Tri : Amis en premier
     const friendsReviews = allReviews.filter((r: any) => r.profiles && followingIds.includes(r.profiles.id));
     let otherReviews = allReviews.filter((r: any) => !r.profiles || !followingIds.includes(r.profiles.id));
     
@@ -87,21 +87,20 @@ export default function AlbumPage({ params }: { params: any }) {
 
     setReviews(sortedReviews);
     
-    // Affiche seulement les avis sur l'ALBUM GLOBAL par défaut (pas les pistes)
+    // 3. Filtre et Limite
     const albumOnlyReviews = sortedReviews.filter((r:any) => !r.track_id);
     setDisplayedReviews(albumOnlyReviews.slice(0, 3));
   };
 
   const handleShowAll = () => {
     setShowAll(true);
-    // Affiche tous les avis d'album
     setDisplayedReviews(reviews.filter((r:any) => !r.track_id));
   };
 
   // --- CALCUL DES MOYENNES ---
   const getAverageRating = (trackId: string | null = null) => {
     const targetReviews = reviews.filter((r: any) => 
-        trackId ? r.track_id === String(trackId) : (!r.track_id || r.track_id === "")
+        trackId ? r.track_id === String(trackId) : (!r.track_id)
     );
     if (targetReviews.length === 0) return null;
     const sum = targetReviews.reduce((acc, r) => acc + r.rating, 0);
@@ -133,8 +132,7 @@ export default function AlbumPage({ params }: { params: any }) {
         album_id: albumId,
         album_name: album.collectionName,
         artist_name: album.artistName,
-        // FORCE HD
-        album_image: album.artworkUrl100.replace('100x100', '1000x1000'),
+        album_image: album.artworkUrl100.replace('100x100', '1000x1000'), // HD
         rating: userRating,
         review_text: reviewText,
         user_name: pseudo,
@@ -160,7 +158,7 @@ export default function AlbumPage({ params }: { params: any }) {
   const highResImage = album.artworkUrl100.replace('100x100', '1000x1000');
   const albumAvg = getAverageRating(null);
 
-  // Liens
+  // Liens Streaming
   const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(album.collectionName + " " + album.artistName)}`;
   const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(album.collectionName + " " + album.artistName)}`;
   const appleMusicUrl = album.collectionViewUrl;
@@ -168,17 +166,17 @@ export default function AlbumPage({ params }: { params: any }) {
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
       
-      {/* --- GLOWS --- */}
+      {/* GLOWS */}
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
       <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      {/* --- NAVBAR FLOTTANTE --- */}
+      {/* NAVBAR */}
       <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
         <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
             <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
             <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="hover:text-[#00e054] transition text-white">← Retour</Link>
-                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline text-gray-300">Communauté</Link>
+                <Link href="/search" className="text-white hover:text-[#00e054] transition">← Retour</Link>
+                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
                 {currentUser ? (
                     <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
@@ -192,19 +190,16 @@ export default function AlbumPage({ params }: { params: any }) {
         </nav>
       </div>
 
-      {/* --- HEADER ALBUM --- */}
+      {/* HEADER ALBUM */}
       <header className="relative w-full h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a]">
-        {/* Fond flouté */}
         <img src={highResImage} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-3xl scale-110 pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
 
         <div className="relative z-10 max-w-6xl mx-auto w-full px-6 py-12 flex flex-col md:flex-row gap-10 items-end">
-            {/* Pochette */}
             <div className="relative w-64 h-64 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden bg-black flex-shrink-0 group">
                 <img src={highResImage} className="w-full h-full object-cover" />
-                {/* NOTE MOYENNE */}
                 {albumAvg && (
-                    <div className="absolute top-4 right-4 bg-black/80 backdrop-blur text-[#00e054] px-3 py-1 rounded-full font-black text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
+                    <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md text-[#00e054] px-3 py-1 rounded-full font-black text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
                         <span>★</span> {albumAvg}
                     </div>
                 )}
@@ -227,12 +222,9 @@ export default function AlbumPage({ params }: { params: any }) {
 
       <main className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-16 relative z-10">
         
-        {/* GAUCHE : ACTIONS (4 cols) */}
+        {/* GAUCHE : ACTIONS */}
         <div className="lg:col-span-4 space-y-8">
-            <button 
-                onClick={() => openRatingModal('album')} 
-                className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-4 rounded-2xl transition uppercase tracking-widest text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-3"
-            >
+            <button onClick={() => openRatingModal('album')} className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-4 rounded-2xl transition uppercase tracking-widest text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-3">
                 <span className="text-xl">★</span> Noter l'Album
             </button>
 
@@ -245,7 +237,7 @@ export default function AlbumPage({ params }: { params: any }) {
                 </div>
             </div>
 
-            {/* LISTE DES AVIS */}
+            {/* SECTION AVIS */}
             <div className="bg-[#121212] p-6 rounded-3xl border border-white/5">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6 pb-2 border-b border-white/5 flex justify-between">
                     <span>Avis Album</span>
@@ -262,14 +254,10 @@ export default function AlbumPage({ params }: { params: any }) {
                             <div key={review.id} className="bg-[#1a1a1a] p-4 rounded-xl border border-white/5">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10 overflow-hidden">
-                                            {review.profiles?.avatar_url ? <img src={review.profiles.avatar_url} className="w-full h-full object-cover" /> : (review.user_name?.[0] || '?')}
+                                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-[10px] font-bold text-white border border-white/10 overflow-hidden">
+                                            {review.profiles?.avatar_url ? <img src={review.profiles.avatar_url} className="w-full h-full object-cover rounded-full" /> : (review.user_name?.[0] || '?')}
                                         </div>
                                         <Link href={`/user/${review.user_name}`} className="font-bold text-xs text-gray-300 hover:text-white transition">{review.user_name}</Link>
-                                        {/* Badge Ami */}
-                                        {currentUser && review.profiles?.id && review.profiles.id !== currentUser.id && reviews.indexOf(review) < reviews.filter((r:any) => r.profiles).length && (
-                                            <span className="text-[9px] bg-[#00e054] text-black px-2 py-0.5 rounded-full font-bold tracking-wider">AMI</span>
-                                        )}
                                     </div>
                                     <div className="text-[#00e054] text-xs tracking-widest">{"★".repeat(review.rating)}</div>
                                 </div>
@@ -286,7 +274,7 @@ export default function AlbumPage({ params }: { params: any }) {
             </div>
         </div>
 
-        {/* COLONNE DROITE : PISTES (8 cols) */}
+        {/* COLONNE DROITE : PISTES */}
         <div className="lg:col-span-8">
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-8 border-b border-white/10 pb-4 flex justify-between items-center">
                 <span>Pistes de l'album</span>
@@ -304,7 +292,6 @@ export default function AlbumPage({ params }: { params: any }) {
                                 <div className="font-bold text-gray-300 group-hover:text-white truncate text-lg">{track.trackName}</div>
                             </div>
 
-                            {/* Zone Note & Moyenne */}
                             <div className="flex items-center gap-6">
                                 {trackAvg && (
                                     <div className="flex items-center gap-1 text-sm font-black text-[#00e054] bg-[#00e054]/10 px-3 py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
@@ -312,17 +299,8 @@ export default function AlbumPage({ params }: { params: any }) {
                                     </div>
                                 )}
                                 
-                                <button 
-                                    onClick={() => openRatingModal(track)}
-                                    className="text-gray-700 hover:text-white text-2xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100"
-                                    title="Noter ce titre"
-                                >
-                                    ★
-                                </button>
-
-                                <span className="text-xs text-gray-600 font-mono w-10 text-right">
-                                    {Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}
-                                </span>
+                                <button onClick={() => openRatingModal(track)} className="text-gray-700 hover:text-white text-2xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100" title="Noter ce titre">★</button>
+                                <span className="text-xs text-gray-600 font-mono w-10 text-right">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
                             </div>
                         </div>
                     );
@@ -332,7 +310,7 @@ export default function AlbumPage({ params }: { params: any }) {
 
       </main>
 
-      {/* MODALE */}
+      {/* MODALE DE NOTATION */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95">
