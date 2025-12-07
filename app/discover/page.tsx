@@ -1,0 +1,519 @@
+'use client';
+
+import { useEffect, useState, useRef, useCallback } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabaseClient';
+
+interface Review {
+  id: number;
+  user_id: string;
+  album_id: string;
+  album_name: string;
+  album_image: string;
+  artist_name: string;
+  rating: number;
+  review_text: string;
+  created_at: string;
+  profiles: {
+    username: string;
+    avatar_url?: string;
+  };
+}
+
+interface AudioState {
+  [key: string]: {
+    audio: HTMLAudioElement | null;
+    isPlaying: boolean;
+    previewUrl: string | null;
+    isLoading: boolean;
+  };
+}
+
+export default function DiscoverPage() {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [audioStates, setAudioStates] = useState<AudioState>({});
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentVisibleCard, setCurrentVisibleCard] = useState<string | null>(null);
+  const [audioTimeout, setAudioTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // 1. RÉCUPÉRATION DES CRITIQUES ALÉATOIRES
+  const fetchRandomReviews = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Récupérer toutes les critiques avec jointure sur profiles
+      const { data: reviewsData, error } = await supabase
+        .from('reviews')
+        .select(`
+          *,
+          profiles!reviews_user_id_fkey (
+            username,
+            avatar_url
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50); // Récupérer plus pour avoir de la variété
+
+      if (error) throw error;
+
+      // Mélanger aléatoirement et prendre les 20 premières
+      const shuffled = reviewsData?.sort(() => 0.5 - Math.random()) || [];
+      const randomReviews = shuffled.slice(0, 20);
+
+      setReviews(randomReviews);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des critiques:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 2. RÉCUPÉRATION DU PREVIEW AUDIO
+  const fetchAudioPreview = useCallback(async (albumId: string) => {
+    try {
+      const response = await fetch(`https://itunes.apple.com/lookup?id=${albumId}&entity=song&limit=1`);
+      const data = await response.json();
+
+      if (data.results && data.results.length > 1) { // Index 0 est l'album, 1+ sont les pistes
+        const track = data.results[1]; // Première piste
+        return track.previewUrl || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du preview:', error);
+      return null;
+    }
+  }, []);
+
+  // 3. GESTION AUDIO
+  const playAudio = useCallback(async (albumId: string) => {
+    const currentState = audioStates[albumId];
+
+    // Si déjà en cours de lecture ou de chargement, ne rien faire
+    if (currentState?.isPlaying || currentState?.isLoading) {
+      return;
+    }
+
+    // Marquer comme en chargement
+    setAudioStates(prev => ({
+      ...prev,
+      [albumId]: {
+        ...prev[albumId],
+        isLoading: true
+      }
+    }));
+
+    try {
+      // Arrêter tous les autres audios d'abord
+      await Promise.all(
+        Object.entries(audioStates).map(async ([id, state]) => {
+          if (id !== albumId && state.audio && state.isPlaying) {
+            state.audio.pause();
+            state.audio.currentTime = 0;
+            setAudioStates(prev => ({
+              ...prev,
+              [id]: { ...state, isPlaying: false }
+            }));
+          }
+        })
+      );
+
+      let audio: HTMLAudioElement;
+      let previewUrl: string | null = null;
+
+      // Si pas de preview, essayer de le récupérer
+      if (!currentState?.previewUrl) {
+        previewUrl = await fetchAudioPreview(albumId);
+        if (!previewUrl) {
+          setAudioStates(prev => ({
+            ...prev,
+            [albumId]: { ...prev[albumId], isLoading: false }
+          }));
+          return;
+        }
+        audio = new Audio(previewUrl);
+      } else {
+        // Audio déjà chargé
+        audio = currentState.audio!;
+        previewUrl = currentState.previewUrl;
+      }
+
+      // Configuration audio
+      audio.muted = isMuted;
+      audio.volume = 0.3;
+      audio.loop = false; // Pas de boucle pour éviter les conflits
+
+      // Événements audio
+      const handleEnded = () => {
+        setAudioStates(prev => ({
+          ...prev,
+          [albumId]: { ...prev[albumId], isPlaying: false }
+        }));
+      };
+
+      const handleError = () => {
+        console.error('Erreur audio pour', albumId);
+        setAudioStates(prev => ({
+          ...prev,
+          [albumId]: { ...prev[albumId], isPlaying: false, isLoading: false }
+        }));
+      };
+
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+
+      // Jouer l'audio
+      await audio.play();
+
+      // Mettre à jour l'état
+      setAudioStates(prev => ({
+        ...prev,
+        [albumId]: {
+          audio,
+          isPlaying: true,
+          previewUrl,
+          isLoading: false
+        }
+      }));
+
+    } catch (error) {
+      console.error('Erreur de lecture audio:', error);
+      setAudioStates(prev => ({
+        ...prev,
+        [albumId]: { ...prev[albumId], isPlaying: false, isLoading: false }
+      }));
+    }
+  }, [audioStates, isMuted, fetchAudioPreview]);
+
+  const pauseAudio = useCallback((albumId: string) => {
+    const state = audioStates[albumId];
+    if (state?.audio && state.isPlaying) {
+      try {
+        state.audio.pause();
+        setAudioStates(prev => ({
+          ...prev,
+          [albumId]: { ...state, isPlaying: false }
+        }));
+      } catch (error) {
+        console.error('Erreur lors de la pause audio:', error);
+      }
+    }
+  }, [audioStates]);
+
+  // 4. INTERSECTION OBSERVER
+  const setupIntersectionObserver = useCallback(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const albumId = entry.target.getAttribute('data-album-id');
+
+          if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
+            // Carte visible à plus de 70%
+            // Annuler le timeout précédent
+            if (audioTimeout) {
+              clearTimeout(audioTimeout);
+            }
+
+            // Délai de 200ms pour éviter les changements trop rapides
+            const timeout = setTimeout(() => {
+              setCurrentVisibleCard(albumId);
+              if (albumId) playAudio(albumId);
+            }, 200);
+
+            setAudioTimeout(timeout);
+          } else if (entry.intersectionRatio < 0.3) {
+            // Carte presque invisible (< 30%)
+            if (albumId && currentVisibleCard === albumId) {
+              // Annuler le timeout si la carte devient invisible
+              if (audioTimeout) {
+                clearTimeout(audioTimeout);
+                setAudioTimeout(null);
+              }
+
+              setCurrentVisibleCard(null);
+              pauseAudio(albumId);
+            }
+          }
+        });
+      },
+      {
+        root: containerRef.current,
+        threshold: [0.3, 0.7], // Seuils à 30% et 70%
+        rootMargin: '0px'
+      }
+    );
+
+    // Observer toutes les cartes
+    const cards = containerRef.current?.querySelectorAll('[data-album-id]');
+    cards?.forEach(card => {
+      observerRef.current?.observe(card);
+    });
+  }, [playAudio, pauseAudio, currentVisibleCard, audioTimeout]);
+
+  // 5. GESTION DU MUTE GLOBAL
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => {
+      const newMuted = !prev;
+
+      // Appliquer le mute à tous les audios en cours
+      Object.values(audioStates).forEach(state => {
+        if (state.audio) {
+          state.audio.muted = newMuted;
+        }
+      });
+
+      return newMuted;
+    });
+  }, [audioStates]);
+
+  // 6. EFFETS
+  useEffect(() => {
+    fetchRandomReviews();
+  }, [fetchRandomReviews]);
+
+  useEffect(() => {
+    if (reviews.length > 0 && !loading) {
+      // Petit délai pour s'assurer que le DOM est rendu
+      setTimeout(setupIntersectionObserver, 100);
+    }
+  }, [reviews, loading, setupIntersectionObserver]);
+
+  // 7. CLEANUP
+  useEffect(() => {
+    return () => {
+      // Nettoyer le timeout
+      if (audioTimeout) {
+        clearTimeout(audioTimeout);
+      }
+
+      // Arrêter tous les audios et nettoyer l'observer
+      Object.values(audioStates).forEach(state => {
+        if (state.audio) {
+          state.audio.pause();
+          state.audio.currentTime = 0;
+        }
+      });
+
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [audioStates, audioTimeout]);
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-[#050505] flex items-center justify-center">
+        <div className="text-white text-xl">Chargement des découvertes...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen bg-[#050505] text-white overflow-hidden">
+      {/* Background Glow */}
+      <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
+
+      {/* NAVBAR FLOTTANTE */}
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
+        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
+                <Link href="/search" className="hover:text-[#00e054] transition">Albums</Link>
+                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-2 text-[#00e054]">⚡ Découvrir</Link>
+                <Link href="/community" className="hover:text-[#00e054] transition">Membres</Link>
+                <button
+                  onClick={toggleMute}
+                  className="text-white hover:text-[#00e054] transition text-lg"
+                  title={isMuted ? "Activer le son" : "Couper le son"}
+                >
+                  {isMuted ? "🔇" : "🔊"}
+                </button>
+            </div>
+        </nav>
+      </div>
+
+      {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
+      <div
+        ref={containerRef}
+        className="h-screen overflow-y-auto snap-y snap-mandatory"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        {reviews.map((review) => (
+          <DiscoverCard
+            key={review.id}
+            review={review}
+            isActive={currentVisibleCard === review.album_id}
+            audioState={audioStates[review.album_id]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// COMPOSANT CARTE DE DÉCOUVERTE
+interface DiscoverCardProps {
+  review: Review;
+  isActive: boolean;
+  audioState?: AudioState[string];
+}
+
+function DiscoverCard({ review, isActive, audioState }: DiscoverCardProps) {
+  const [showComments, setShowComments] = useState(false);
+  const [likes, setLikes] = useState(12); // Likes simulés
+  const [hasLiked, setHasLiked] = useState(false);
+
+  const handleLike = () => {
+    setHasLiked(!hasLiked);
+    setLikes(prev => hasLiked ? prev - 1 : prev + 1);
+  };
+
+  return (
+    <div
+      data-album-id={review.album_id}
+      className="relative h-screen snap-start flex items-center justify-center"
+    >
+      {/* FOND : POCHETTE FLOUTÉE ET ASSOMBRI */}
+      <div className="absolute inset-0">
+        <img
+          src={review.album_image}
+          alt={`${review.album_name} - fond flouté`}
+          className="w-full h-full object-cover filter brightness-50 blur-sm scale-110"
+        />
+        <div className="absolute inset-0 bg-black/40" />
+      </div>
+
+      {/* CONTENU PRINCIPAL */}
+      <div className="relative z-10 flex items-center justify-center w-full h-full px-6">
+
+        {/* CENTRAGE : POCHETTE QUI TOURNE */}
+        <div className="flex flex-col items-center justify-center space-y-8">
+          <div className="relative">
+            <img
+              src={review.album_image}
+              alt={`Pochette de l'album ${review.album_name}`}
+              className={`w-80 h-80 object-cover rounded-2xl shadow-2xl border-4 border-white/20 ${
+                isActive ? 'animate-spin' : ''
+              }`}
+              style={{
+                animationDuration: '20s',
+                animationTimingFunction: 'linear',
+                animationIterationCount: 'infinite'
+              }}
+            />
+
+            {/* INDICATEUR DE LECTURE AUDIO */}
+            {isActive && (audioState?.isPlaying || audioState?.isLoading) && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center animate-pulse ${
+                  audioState.isLoading ? 'bg-gray-500' : 'bg-[#00e054]'
+                }`}>
+                  <span className="text-black text-2xl">
+                    {audioState.isLoading ? '⏳' : '🎵'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* OVERLAY BAS : INFOS DE LA CRITIQUE */}
+        <div className="absolute bottom-8 left-6 right-6 bg-black/60 backdrop-blur-xl rounded-3xl p-6 border border-white/10">
+          <div className="flex items-start justify-between gap-6">
+
+            {/* TEXTE DE LA CRITIQUE */}
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <Link href={`/user/${review.profiles.username}`} className="flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg font-bold text-black overflow-hidden">
+                    {review.profiles.avatar_url ? (
+                      <img src={review.profiles.avatar_url} alt={`Avatar de ${review.profiles.username}`} className="w-full h-full object-cover" />
+                    ) : (
+                      review.profiles.username[0].toUpperCase()
+                    )}
+                  </div>
+                  <span className="font-bold text-white group-hover:text-[#00e054] transition">
+                    {review.profiles.username}
+                  </span>
+                </Link>
+              </div>
+
+              <h3 className="text-xl font-bold text-white mb-2">
+                {review.album_name} - {review.artist_name}
+              </h3>
+
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[#00e054] font-bold text-lg">
+                  {"★".repeat(review.rating)}
+                </span>
+                <span className="text-gray-400 text-sm">
+                  {new Date(review.created_at).toLocaleDateString('fr-FR')}
+                </span>
+              </div>
+
+              <p className="text-gray-300 text-sm leading-relaxed italic max-w-2xl">
+                &ldquo;{review.review_text}&rdquo;
+              </p>
+            </div>
+
+            {/* ACTIONS DROITE */}
+            <div className="flex flex-col items-center gap-6">
+              <button
+                onClick={handleLike}
+                className={`p-4 rounded-full border-2 transition-all ${
+                  hasLiked
+                    ? 'bg-[#00e054] border-[#00e054] text-black'
+                    : 'border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054]'
+                }`}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="text-2xl">❤️</span>
+                  <span className="text-xs mt-1">{likes}</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowComments(true)}
+                className="p-4 rounded-full border-2 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] transition-all"
+              >
+                <span className="text-2xl">💬</span>
+              </button>
+
+              <Link
+                href={`/album/${review.album_id}`}
+                className="p-4 rounded-full border-2 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] transition-all"
+              >
+                <span className="text-2xl">👁️</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MODALE COMMENTAIRES (SIMPLIFIÉE) */}
+      {showComments && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Commentaires</h2>
+              <button onClick={() => setShowComments(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
+            </div>
+
+            <div className="text-center py-8">
+              <div className="text-gray-500 text-sm">
+                Fonctionnalité de commentaires à venir !
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
