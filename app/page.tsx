@@ -261,8 +261,8 @@ export default function Home() {
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
             <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="hover:text-[#00e054] transition flex items-center gap-2">
-                    <span className="text-lg">🔍</span> <span className="hidden sm:inline">Chercher</span>
+                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-2">
+                    <span className="text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
                 </Link>
                 <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
                 {user ? (
