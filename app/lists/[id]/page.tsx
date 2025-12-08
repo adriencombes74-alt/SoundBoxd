@@ -21,10 +21,6 @@ export default function ListDetailsPage({ params }: { params: any }) {
     }
   }, [params]);
 
-  useEffect(() => {
-    if (listId) fetchListData();
-  }, [listId]);
-
   const fetchListData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
@@ -50,6 +46,10 @@ export default function ListDetailsPage({ params }: { params: any }) {
     setOwner(ownerData || { username: 'Inconnu' });
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (listId) fetchListData();
+  }, [listId]);
 
   const handleDelete = async () => {
     if (!confirm("Voulez-vous vraiment supprimer cette liste ?")) return;
@@ -83,7 +83,7 @@ export default function ListDetailsPage({ params }: { params: any }) {
       // Combiner en-têtes et données
       const csvContent = [headers, ...rows]
         .map(row =>
-          row.map(field =>
+          row.map((field: string) =>
             // Échapper les guillemets et entourer de guillemets si nécessaire
             `"${String(field).replace(/"/g, '""')}"`
           ).join(',')
