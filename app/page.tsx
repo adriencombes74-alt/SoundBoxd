@@ -29,10 +29,29 @@ export default function Home() {
 
   const genres = ["Pop", "Hip-Hop", "Rock", "Alternative", "Indie", "Electronic", "Jazz", "R&B", "Metal", "Classical"];
 
-  useEffect(() => {
-    checkUser();
-    fetchData();
-  }, []);
+
+  const fetchMyLikes = async (userId: string) => {
+    const { data } = await supabase.from('likes').select('review_id').eq('user_id', userId);
+    if (data) setMyLikes(new Set(data.map((l: any) => l.review_id)));
+  };
+
+  const fetchFriendReviews = async (userId: string) => {
+    const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', userId);
+    const ids = follows?.map((f: any) => f.following_id) || [];
+    if (ids.length === 0) return;
+
+    const { data: profiles } = await supabase.from('profiles').select('username').in('id', ids);
+    const usernames = profiles?.map((p: any) => p.username) || [];
+
+    const { data: friendsData } = await supabase
+      .from('reviews')
+      .select('*')
+      .in('user_name', usernames)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    setFriendReviews(friendsData || []);
+  };
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -43,14 +62,9 @@ export default function Home() {
     }
   };
 
-  const fetchMyLikes = async (userId: string) => {
-    const { data } = await supabase.from('likes').select('review_id').eq('user_id', userId);
-    if (data) setMyLikes(new Set(data.map((l: any) => l.review_id)));
-  };
-
   const fetchData = async () => {
     setLoading(true);
-    
+
     // 1. RÉCUPÉRATION DES DONNÉES POUR LES TOPS
     const { data: allReviews } = await supabase
       .from('reviews')
@@ -68,7 +82,7 @@ export default function Home() {
             if (review.track_id) {
                 if (!songMap.has(review.track_id)) {
                     songMap.set(review.track_id, {
-                        id: review.track_id, 
+                        id: review.track_id,
                         albumId: review.album_id,
                         name: review.track_name,
                         artist: review.artist_name,
@@ -80,7 +94,7 @@ export default function Home() {
                 const song = songMap.get(review.track_id);
                 song.totalRating += review.rating;
                 song.count += 1;
-            } 
+            }
             // Sinon, c'est un album complet
             else {
                 if (!albumMap.has(review.album_id)) {
@@ -125,23 +139,11 @@ export default function Home() {
     setLoading(false);
   };
 
-  const fetchFriendReviews = async (userId: string) => {
-    const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', userId);
-    const ids = follows?.map((f: any) => f.following_id) || [];
-    if (ids.length === 0) return;
+  useEffect(() => {
+    checkUser();
+    fetchData();
+  }, []);
 
-    const { data: profiles } = await supabase.from('profiles').select('username').in('id', ids);
-    const usernames = profiles?.map((p: any) => p.username) || [];
-
-    const { data: friendsData } = await supabase
-      .from('reviews')
-      .select('*')
-      .in('user_name', usernames)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    
-    setFriendReviews(friendsData || []);
-  };
 
   // --- ACTIONS SOCIALES ---
   const handleLike = async (review: any) => {
@@ -255,61 +257,64 @@ export default function Home() {
       <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
-            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-2">
-                    <span className="text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+            <div className="flex items-center gap-3 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
+                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
+                    <span className="text-base md:text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
                 </Link>
-                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
+                <Link href="/lists/import" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
+                    <span className="text-base md:text-lg">📥</span> <span className="hidden sm:inline">Importer</span>
+                </Link>
+                <Link href="/community" className="hover:text-[#00e054] transition hidden md:inline">Communauté</Link>
                 {user ? (
-                    <Link href="/profile" className="flex items-center gap-2 pl-4 border-l border-white/10 hover:opacity-80 transition">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs">
+                    <Link href="/profile" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">
                             {user.email[0].toUpperCase()}
                         </div>
                     </Link>
                 ) : (
-                    <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
+                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
                 )}
             </div>
         </nav>
       </div>
 
       {/* HERO */}
-      <header className="relative pt-40 pb-10 px-6 flex flex-col items-center text-center z-10">
-        <h1 className="text-5xl md:text-8xl font-black tracking-tight mb-6 leading-none text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
-          VOTRE VIE EN <br/><span className="text-[#00e054]">MUSIQUE.</span>
+      <header className="relative pt-32 md:pt-40 pb-8 md:pb-10 px-4 md:px-6 flex flex-col items-center text-center z-10">
+        <h1 className="text-3xl md:text-5xl lg:text-8xl font-black tracking-tight mb-4 md:mb-6 leading-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
+          <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden"/><span className="text-[#00e054]">MUSIQUE.</span>
         </h1>
-        
-        <p className="text-lg text-gray-400 max-w-xl mb-8 font-light">
+
+        <p className="text-base md:text-lg text-gray-400 max-w-sm md:max-w-xl mb-6 md:mb-8 font-light px-2">
             Notez vos albums, écrivez des critiques et découvrez de nouvelles pépites grâce à la communauté.
         </p>
-        
-        <div className="w-full max-w-md relative group mb-8">
+
+        <div className="w-full max-w-sm md:max-w-md relative group mb-6 md:mb-8">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00e054] to-blue-600 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
-            <Link href="/search" className="relative flex items-center bg-black rounded-full px-6 py-4 w-full hover:bg-[#111] transition">
-                <span className="text-gray-500 mr-3">🔍</span>
-                <span className="text-gray-400 text-sm">Chercher un album, un artiste...</span>
+            <Link href="/search" className="relative flex items-center bg-black rounded-full px-4 md:px-6 py-3 md:py-4 w-full hover:bg-[#111] transition">
+                <span className="text-gray-500 mr-2 md:mr-3 text-lg">🔍</span>
+                <span className="text-gray-400 text-xs md:text-sm">Chercher un album, un artiste...</span>
             </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 relative z-10 space-y-20">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 relative z-10 space-y-12 md:space-y-20">
         
         {/* 1. PARCOURIR PAR GENRE */}
         <section>
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <span className="w-2 h-2 bg-[#00e054] rounded-full"></span> Parcourir par Genre
+            <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-6 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-[#00e054] rounded-full"></span> Parcourir par Genre
             </h2>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 md:gap-3">
                 {genres.map((genre) => (
-                    <Link 
+                    <Link
                         key={genre}
-                        href={`/search?q=${genre}&type=album`} 
-                        className="px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-sm font-bold transition-all hover:scale-105 hover:shadow-lg hover:bg-[#202020]"
+                        href={`/search?q=${genre}&type=album`}
+                        className="px-4 md:px-6 py-2 md:py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-105 hover:shadow-lg hover:bg-[#202020]"
                     >
                         {genre}
                     </Link>
@@ -319,63 +324,63 @@ export default function Home() {
 
         {/* 2. TOP RATED ALBUMS */}
         <section>
-            <div className="flex justify-between items-end mb-8 border-b border-white/10 pb-4">
-                <h2 className="text-3xl font-black text-white tracking-tight">🏆 Top Albums</h2>
-                <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
+            <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-6 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0">🏆 Top Albums</h2>
+                <span className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
             </div>
             {topAlbums.length > 0 ? (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
                         {topAlbums.slice(0, limitTopAlbums).map((album, index) => (
                             <TopItemCard key={album.id} item={album} rank={index + 1} type="album" />
                         ))}
                     </div>
                     {limitTopAlbums < topAlbums.length && (
-                        <div className="mt-8 text-center">
-                            <button onClick={() => setLimitTopAlbums(p => p + 5)} className="px-8 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-xs font-bold uppercase tracking-widest">+ Voir plus</button>
+                        <div className="mt-6 md:mt-8 text-center">
+                            <button onClick={() => setLimitTopAlbums(p => p + 5)} className="px-6 md:px-8 py-2 md:py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-[10px] md:text-xs font-bold uppercase tracking-widest">+ Voir plus</button>
                         </div>
                     )}
                 </>
             ) : (
-                <div className="text-gray-500 italic">Pas encore assez de notes.</div>
+                <div className="text-gray-500 italic text-sm">Pas encore assez de notes.</div>
             )}
         </section>
 
         {/* 3. TOP RATED SONGS (NOUVEAU) */}
         <section>
-            <div className="flex justify-between items-end mb-8 border-b border-white/10 pb-4">
-                <h2 className="text-3xl font-black text-white tracking-tight">🎵 Top Titres</h2>
-                <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
+            <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-6 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0">🎵 Top Titres</h2>
+                <span className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
             </div>
             {topSongs.length > 0 ? (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
                         {topSongs.slice(0, limitTopSongs).map((song, index) => (
                             <TopItemCard key={song.id} item={song} rank={index + 1} type="song" />
                         ))}
                     </div>
                     {limitTopSongs < topSongs.length && (
-                        <div className="mt-8 text-center">
-                            <button onClick={() => setLimitTopSongs(p => p + 5)} className="px-8 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-xs font-bold uppercase tracking-widest">+ Voir plus</button>
+                        <div className="mt-6 md:mt-8 text-center">
+                            <button onClick={() => setLimitTopSongs(p => p + 5)} className="px-6 md:px-8 py-2 md:py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-[10px] md:text-xs font-bold uppercase tracking-widest">+ Voir plus</button>
                         </div>
                     )}
                 </>
             ) : (
-                <div className="text-gray-500 italic">Pas encore assez de notes sur les pistes.</div>
+                <div className="text-gray-500 italic text-sm">Pas encore assez de notes sur les pistes.</div>
             )}
         </section>
 
         {/* 4. DERNIERS AVIS */}
         <section>
-            <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
-                <h2 className="text-2xl font-black text-white tracking-tight">✨ Derniers Avis</h2>
+            <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
+                <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">✨ Derniers Avis</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                {loading ? [1,2,3,4,5].map(i => <div key={i} className="h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.slice(0, limitRecent).map(r => <ReviewCard key={r.id} review={r} />)}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
+                {loading ? [1,2,3,4,5].map(i => <div key={i} className="h-48 md:h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.slice(0, limitRecent).map(r => <ReviewCard key={r.id} review={r} />)}
             </div>
             {recentReviews.length > limitRecent && (
-                <div className="mt-8 text-center">
-                    <button onClick={() => setLimitRecent(p => p + 5)} className="px-8 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-xs font-bold uppercase tracking-widest">
+                <div className="mt-6 md:mt-8 text-center">
+                    <button onClick={() => setLimitRecent(p => p + 5)} className="px-6 md:px-8 py-2 md:py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-[10px] md:text-xs font-bold uppercase tracking-widest">
                         + Voir plus
                     </button>
                 </div>
@@ -385,22 +390,22 @@ export default function Home() {
         {/* 5. AMIS */}
         {user && (
             <section>
-                <div className="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
-                    <h2 className="text-2xl font-black text-white tracking-tight">👥 Activité des Amis</h2>
+                <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
+                    <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">👥 Activité des Amis</h2>
                 </div>
                 {friendReviews.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
                         {friendReviews.slice(0, limitFriends).map(r => <ReviewCard key={r.id} review={r} />)}
                     </div>
                 ) : (
-                    <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
-                        <p className="text-gray-500 mb-2">Vos amis n'ont rien posté récemment.</p>
+                    <div className="text-center py-8 md:py-12 border border-dashed border-white/10 rounded-2xl mx-2 md:mx-0">
+                        <p className="text-gray-500 mb-2 text-sm md:text-base">Vos amis n'ont rien posté récemment.</p>
                         <Link href="/community" className="text-[#00e054] hover:underline font-bold text-sm">Trouver des gens à suivre →</Link>
                     </div>
                 )}
                 {friendReviews.length > limitFriends && (
-                    <div className="mt-8 text-center">
-                        <button onClick={() => setLimitFriends(p => p + 5)} className="px-8 py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-xs font-bold uppercase tracking-widest">
+                    <div className="mt-6 md:mt-8 text-center">
+                        <button onClick={() => setLimitFriends(p => p + 5)} className="px-6 md:px-8 py-2 md:py-3 rounded-full border border-white/10 hover:bg-white hover:text-black transition text-[10px] md:text-xs font-bold uppercase tracking-widest">
                             + Voir plus
                         </button>
                     </div>
@@ -412,31 +417,31 @@ export default function Home() {
 
       {/* MODALE */}
       {selectedReview && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-white">{selectedReview.album_name}</h2>
-                    <button onClick={() => setSelectedReview(null)} className="text-gray-500 hover:text-white text-2xl">✕</button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-2 md:p-4 animate-in fade-in duration-200">
+            <div className="bg-[#1a1a1a] p-4 md:p-8 rounded-2xl md:rounded-3xl w-full max-w-sm md:max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+                <div className="flex justify-between items-center mb-3 md:mb-4">
+                    <h2 className="text-lg md:text-2xl font-bold text-white pr-2">{selectedReview.album_name}</h2>
+                    <button onClick={() => setSelectedReview(null)} className="text-gray-500 hover:text-white text-xl md:text-2xl">✕</button>
                 </div>
-                <p className="text-gray-300 italic mb-8 leading-relaxed">"{selectedReview.review_text}"</p>
-                
-                <div className="flex-1 overflow-y-auto space-y-4 max-h-60 mb-6">
+                <p className="text-gray-300 italic mb-6 md:mb-8 leading-relaxed text-sm md:text-base">"{selectedReview.review_text}"</p>
+
+                <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 max-h-48 md:max-h-60 mb-4 md:mb-6">
                      {comments.map(c => (
-                        <div key={c.id} className="flex gap-3">
-                            <div className="w-6 h-6 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-[10px] flex items-center justify-center font-bold border border-white/10 text-gray-400">
-                                {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
+                        <div key={c.id} className="flex gap-2 md:gap-3">
+                            <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/10 text-gray-400">
+                                {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
                             </div>
                             <div>
-                                <span className="text-xs font-bold text-white">{c.profiles?.username}</span>
-                                <p className="text-xs text-gray-400">{c.content}</p>
+                                <span className="text-[10px] md:text-xs font-bold text-white">{c.profiles?.username}</span>
+                                <p className="text-[10px] md:text-xs text-gray-400">{c.content}</p>
                             </div>
                         </div>
                      ))}
                 </div>
 
                 <div className="flex gap-2">
-                    <input className="flex-1 bg-black border border-gray-700 rounded-full px-4 py-2 text-white text-sm" value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Commenter..." />
-                    <button onClick={postComment} className="bg-[#00e054] text-black px-4 rounded-full font-bold">➤</button>
+                    <input className="flex-1 bg-black border border-gray-700 rounded-full px-3 md:px-4 py-2 text-white text-xs md:text-sm" value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Commenter..." />
+                    <button onClick={postComment} className="bg-[#00e054] text-black px-3 md:px-4 rounded-full font-bold text-sm md:text-base">➤</button>
                 </div>
             </div>
         </div>

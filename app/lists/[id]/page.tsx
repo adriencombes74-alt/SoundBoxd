@@ -62,6 +62,63 @@ export default function ListDetailsPage({ params }: { params: any }) {
     alert("Lien copié !");
   };
 
+  const handleExportCSV = () => {
+    if (!list || !list.albums || list.albums.length === 0) {
+      alert("Aucune donnée à exporter !");
+      return;
+    }
+
+    try {
+      // Créer les en-têtes CSV
+      const headers = ['Artist', 'Track Name', 'Album'];
+
+      // Créer les lignes de données
+      const rows = list.albums.map((item: any) => [
+        item.artist || '',
+        item.name || '',
+        // Pour les albums, on peut utiliser le nom de l'album si disponible, sinon une valeur par défaut
+        item.album || item.collectionName || (item.type === 'album' ? item.name : 'Album inconnu')
+      ]);
+
+      // Combiner en-têtes et données
+      const csvContent = [headers, ...rows]
+        .map(row =>
+          row.map(field =>
+            // Échapper les guillemets et entourer de guillemets si nécessaire
+            `"${String(field).replace(/"/g, '""')}"`
+          ).join(',')
+        )
+        .join('\n');
+
+      // Créer le blob
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      // Créer l'URL du blob
+      const url = URL.createObjectURL(blob);
+
+      // Créer un élément <a> temporaire pour le téléchargement
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${list.title || 'playlist'}.csv`);
+      link.style.visibility = 'hidden';
+
+      // Ajouter à la page, cliquer et supprimer
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Libérer l'URL
+      URL.revokeObjectURL(url);
+
+      // Notification de succès
+      alert(`Fichier CSV "${list.title || 'playlist'}.csv" téléchargé avec succès !`);
+
+    } catch (error) {
+      console.error('Erreur lors de l\'export CSV:', error);
+      alert('Erreur lors de l\'exportation du fichier CSV.');
+    }
+  };
+
   const handleEdit = async () => {
     const newTitle = prompt("Nouveau titre :", list.title);
     if (newTitle) {
@@ -119,6 +176,7 @@ export default function ListDetailsPage({ params }: { params: any }) {
 
             <div className="flex gap-4 mt-10">
                 <button onClick={handleShare} className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Partager 🔗</button>
+                <button onClick={handleExportCSV} className="px-6 py-3 bg-[#00e054]/10 hover:bg-[#00e054]/20 text-[#00e054] rounded-xl border border-[#00e054]/20 transition text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Exporter CSV 📄</button>
                 {currentUser && currentUser.id === list.user_id && (
                     <>
                         <button onClick={handleEdit} className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Modifier ✎</button>

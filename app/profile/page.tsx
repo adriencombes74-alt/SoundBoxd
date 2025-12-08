@@ -105,14 +105,19 @@ export default function ProfilePage() {
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR FLOTTANTE */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="hover:text-[#00e054] transition">Albums</Link>
-                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-2">⚡ Découvrir</Link>
-                <Link href="/community" className="hover:text-[#00e054] transition">Membres</Link>
-                <button onClick={handleSignOut} className="text-red-400 hover:text-red-300 transition border border-red-900/50 px-4 py-2 rounded-full hover:bg-red-900/20">Déconnexion</button>
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+            <div className="flex items-center gap-3 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
+                <Link href="/search" className="hover:text-[#00e054] transition hidden sm:inline">Albums</Link>
+                <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
+                    <span className="text-base md:text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+                </Link>
+                <Link href="/lists/import" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
+                    <span className="text-base md:text-lg">📥</span> <span className="hidden sm:inline">Importer</span>
+                </Link>
+                <Link href="/community" className="hover:text-[#00e054] transition hidden md:inline">Membres</Link>
+                <button onClick={handleSignOut} className="text-red-400 hover:text-red-300 transition border border-red-900/50 px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-red-900/20 text-[10px] md:text-sm">Déconnexion</button>
             </div>
         </nav>
       </div>

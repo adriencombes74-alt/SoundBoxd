@@ -26,6 +26,10 @@ export default function AlbumPage({ params }: { params: any }) {
   const [reviewText, setReviewText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // État pour la lecture audio
+  const [playingTrack, setPlayingTrack] = useState<string | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     if (params instanceof Promise) {
       params.then((unwrappedParams: any) => setAlbumId(unwrappedParams.id));
@@ -148,7 +152,68 @@ export default function AlbumPage({ params }: { params: any }) {
         alert("Erreur : " + error.message);
     } else {
         setIsModalOpen(false);
-        fetchReviewsAndUser(albumId!); 
+        fetchReviewsAndUser(albumId!);
+    }
+  };
+
+  const handlePlayTrack = async (track: any) => {
+    try {
+      // Arrêter la piste en cours si différente
+      if (playingTrack && playingTrack !== track.trackId.toString()) {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+        setPlayingTrack(null);
+        setAudioElement(null);
+      }
+
+      // Si on clique sur la même piste, arrêter
+      if (playingTrack === track.trackId.toString()) {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+        setPlayingTrack(null);
+        setAudioElement(null);
+        return;
+      }
+
+      // Démarrer la nouvelle piste
+      console.log(`🎵 Lecture de "${track.trackName}"`);
+
+      // Essayer de récupérer le preview URL depuis iTunes
+      const response = await fetch(`https://itunes.apple.com/lookup?id=${track.trackId}&entity=song`);
+      const data = await response.json();
+
+      if (data.results && data.results.length > 0) {
+        const trackData = data.results[0];
+        if (trackData.previewUrl) {
+          const audio = new Audio(trackData.previewUrl);
+          audio.volume = 0.6; // Volume un peu plus bas pour les previews
+
+          audio.addEventListener('ended', () => {
+            setPlayingTrack(null);
+            setAudioElement(null);
+          });
+
+          audio.addEventListener('error', () => {
+            console.error('Erreur de lecture audio');
+            setPlayingTrack(null);
+            setAudioElement(null);
+          });
+
+          await audio.play();
+          setPlayingTrack(track.trackId.toString());
+          setAudioElement(audio);
+        } else {
+          console.log('Aucun preview disponible pour cette piste');
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la lecture:', error);
+      setPlayingTrack(null);
+      setAudioElement(null);
     }
   };
 
@@ -177,6 +242,12 @@ export default function AlbumPage({ params }: { params: any }) {
             <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
                 <Link href="/search" className="text-white hover:text-[#00e054] transition">← Retour</Link>
                 <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
+                {playingTrack && (
+                    <div className="flex items-center gap-2 text-[#00e054] animate-pulse">
+                        <span className="text-lg">🎵</span>
+                        <span className="hidden sm:inline">Lecture en cours</span>
+                    </div>
+                )}
                 {currentUser ? (
                     <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
@@ -285,11 +356,32 @@ export default function AlbumPage({ params }: { params: any }) {
                 {tracks.map((track, index) => {
                     const trackAvg = getAverageRating(track.trackId);
                     return (
-                        <div key={track.trackId} className="flex items-center p-4 hover:bg-white/5 rounded-2xl transition group border border-transparent hover:border-white/5">
-                            <span className="w-8 text-gray-600 font-mono text-sm group-hover:text-[#00e054] font-bold">{index + 1}</span>
+                        <div key={track.trackId} className={`flex items-center p-4 rounded-2xl transition group border ${
+                            playingTrack === track.trackId.toString()
+                                ? 'bg-[#00e054]/10 border-[#00e054]/30'
+                                : 'hover:bg-white/5 border-transparent hover:border-white/5'
+                        }`}>
+                            <span className={`w-8 font-mono text-sm font-bold ${
+                                playingTrack === track.trackId.toString()
+                                    ? 'text-[#00e054]'
+                                    : 'text-gray-600 group-hover:text-[#00e054]'
+                            }`}>{index + 1}</span>
                             
                             <div className="flex-1 min-w-0 pr-4">
-                                <div className="font-bold text-gray-300 group-hover:text-white truncate text-lg">{track.trackName}</div>
+                                <button
+                                    onClick={() => handlePlayTrack(track)}
+                                    className={`font-bold truncate text-lg text-left hover:cursor-pointer ${
+                                        playingTrack === track.trackId.toString()
+                                            ? 'text-[#00e054]'
+                                            : 'text-gray-300 group-hover:text-white'
+                                    }`}
+                                    title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
+                                >
+                                    {track.trackName}
+                                    {playingTrack === track.trackId.toString() && (
+                                        <span className="ml-2 text-xs opacity-70">🎵</span>
+                                    )}
+                                </button>
                             </div>
 
                             <div className="flex items-center gap-6">
@@ -298,7 +390,20 @@ export default function AlbumPage({ params }: { params: any }) {
                                         <span className="text-xs opacity-70">★</span> {trackAvg}
                                     </div>
                                 )}
-                                
+
+                                {/* BOUTON PLAY/PAUSE */}
+                                <button
+                                    onClick={() => handlePlayTrack(track)}
+                                    className="text-gray-600 hover:text-[#00e054] text-xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100 flex items-center justify-center"
+                                    title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
+                                >
+                                    {playingTrack === track.trackId.toString() ? (
+                                        <span className="text-[#00e054]">⏸️</span>
+                                    ) : (
+                                        <span>▶️</span>
+                                    )}
+                                </button>
+
                                 <button onClick={() => openRatingModal(track)} className="text-gray-700 hover:text-white text-2xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100" title="Noter ce titre">★</button>
                                 <span className="text-xs text-gray-600 font-mono w-10 text-right">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
                             </div>

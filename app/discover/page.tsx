@@ -37,9 +37,22 @@ export default function DiscoverPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [currentVisibleCard, setCurrentVisibleCard] = useState<string | null>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  const [user, setUser] = useState<{
+    id: string;
+    email?: string;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // 0. AUTHENTIFICATION
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, []);
 
   // 1. RÉCUPÉRATION DES CRITIQUES ALÉATOIRES
   const fetchRandomReviews = useCallback(async () => {
@@ -117,10 +130,9 @@ export default function DiscoverPage() {
         const validTracks = tracks.filter((track: { previewUrl?: string }) => track.previewUrl && track.previewUrl.trim() !== '');
 
         if (validTracks.length > 0) {
-          // Sélectionner une piste au hasard
-          const randomIndex = Math.floor(Math.random() * validTracks.length);
-          const selectedTrack = validTracks[randomIndex];
-          console.log(`✅ Trouvé: "${selectedTrack.trackName}"`);
+          // Sélectionner la première piste disponible
+          const selectedTrack = validTracks[0];
+          console.log(`✅ Trouvé: "${selectedTrack.trackName}" (première piste)`);
           return selectedTrack.previewUrl;
         }
       }
@@ -197,7 +209,6 @@ export default function DiscoverPage() {
         audio = currentState.audio!;
         previewUrl = currentState.previewUrl;
       }
-
       // Configuration audio
       audio.muted = isMuted;
       audio.volume = 0.8;
@@ -443,6 +454,7 @@ export default function DiscoverPage() {
             isActive={currentVisibleCard === review.album_id}
             audioState={audioStates[review.album_id]}
             isAudioEnabled={isAudioEnabled}
+            currentUser={user || null}
           />
         ))}
       </div>
@@ -456,16 +468,150 @@ interface DiscoverCardProps {
   isActive: boolean;
   audioState?: AudioState[string];
   isAudioEnabled: boolean;
+  currentUser: {
+    id: string;
+    email?: string;
+  } | null;
 }
 
-function DiscoverCard({ review, isActive, audioState, isAudioEnabled }: DiscoverCardProps) {
+function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUser }: DiscoverCardProps) {
   const [showComments, setShowComments] = useState(false);
-  const [likes, setLikes] = useState(12); // Likes simulés
+  const [likesCount, setLikesCount] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
+  const [comments, setComments] = useState<{
+    id: number;
+    content: string;
+    created_at: string;
+    profiles: {
+      username: string;
+      avatar_url?: string;
+    };
+  }[]>([]);
+  const [newComment, setNewComment] = useState("");
 
-  const handleLike = () => {
+  // Charger les données sociales au montage
+  useEffect(() => {
+    const fetchSocialData = async () => {
+      try {
+        // Charger le nombre de likes
+        const { count: likesCount } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('review_id', review.id);
+
+        setLikesCount(likesCount || 0);
+
+        // Vérifier si l'utilisateur actuel a liké (si connecté)
+        if (currentUser) {
+          const { data: userLike } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('review_id', review.id)
+            .eq('user_id', currentUser.id)
+            .single();
+
+          setHasLiked(!!userLike);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données sociales:', error);
+      }
+    };
+
+    fetchSocialData();
+  }, [review.id, currentUser]);
+
+  // Charger les commentaires quand on ouvre la modale
+  useEffect(() => {
+    if (showComments) {
+      const fetchComments = async () => {
+        try {
+        const { data } = await supabase
+          .from('comments')
+          .select('*, profiles(username, avatar_url)')
+          .eq('review_id', review.id)
+          .order('created_at', { ascending: true });
+
+        setComments((data || []) as typeof comments);
+        } catch (error) {
+          console.error('Erreur lors du chargement des commentaires:', error);
+        }
+      };
+
+      fetchComments();
+    }
+  }, [showComments, review.id]);
+
+  const handleLike = async () => {
+    if (!currentUser) {
+      alert("Connectez-vous pour aimer une critique !");
+      return;
+    }
+
+    // Optimistic UI update
+    const previousHasLiked = hasLiked;
+    const previousCount = likesCount;
+
     setHasLiked(!hasLiked);
-    setLikes(prev => hasLiked ? prev - 1 : prev + 1);
+    setLikesCount(prev => hasLiked ? prev - 1 : prev + 1);
+
+    try {
+      if (previousHasLiked) {
+        // Supprimer le like
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('review_id', review.id);
+
+        if (error) throw error;
+      } else {
+        // Ajouter le like
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id: currentUser.id,
+            review_id: review.id
+          });
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      // Rollback en cas d'erreur
+      console.error('Erreur lors du like:', error);
+      setHasLiked(previousHasLiked);
+      setLikesCount(previousCount);
+      alert("Une erreur est survenue. Veuillez réessayer.");
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+    if (!currentUser) {
+      alert("Connectez-vous pour commenter !");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .insert({
+          user_id: currentUser.id,
+          review_id: review.id,
+          content: newComment.trim()
+        })
+        .select('*, profiles(username, avatar_url)')
+        .single();
+
+      if (error) throw error;
+
+      // Ajouter le commentaire à la liste locale
+      setComments(prev => [...prev, data]);
+      setNewComment("");
+
+    } catch (error) {
+      console.error('Erreur lors du commentaire:', error);
+      alert("Impossible de poster le commentaire. Veuillez réessayer.");
+    }
   };
 
   return (
@@ -570,8 +716,8 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled }: Discover
                 }`}
               >
                 <div className="flex flex-col items-center">
-                  <span className="text-2xl">❤️</span>
-                  <span className="text-xs mt-1">{likes}</span>
+                  <span className="text-2xl">{hasLiked ? '♥' : '♡'}</span>
+                  <span className="text-xs mt-1 font-bold">{likesCount}</span>
                 </div>
               </button>
 
@@ -593,19 +739,67 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled }: Discover
         </div>
       </div>
 
-      {/* MODALE COMMENTAIRES (SIMPLIFIÉE) */}
+      {/* MODALE COMMENTAIRES FONCTIONNELLE */}
       {showComments && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white">Commentaires</h2>
               <button onClick={() => setShowComments(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
             </div>
 
-            <div className="text-center py-8">
-              <div className="text-gray-500 text-sm">
-                Fonctionnalité de commentaires à venir !
-              </div>
+            {/* Liste des commentaires */}
+            <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
+               {comments.length > 0 ? comments.map(c => (
+                  <div key={c.id} className="flex gap-3 bg-white/5 p-3 rounded-xl border border-white/5">
+                      <div className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400">
+                          {c.profiles?.avatar_url ? (
+                            <img src={c.profiles.avatar_url} alt={c.profiles.username} className="w-full h-full object-cover"/>
+                          ) : (
+                            c.profiles?.username?.[0]?.toUpperCase()
+                          )}
+                      </div>
+                      <div className="flex-1">
+                          <span className="text-xs font-bold text-[#00e054] block mb-1">{c.profiles?.username}</span>
+                          <p className="text-sm text-gray-300 leading-relaxed">{c.content}</p>
+                          <span className="text-xs text-gray-500 mt-1 block">
+                            {new Date(c.created_at).toLocaleDateString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                      </div>
+                  </div>
+               )) : (
+                 <div className="text-center text-gray-500 py-10 italic">
+                   <div className="text-4xl mb-4">💬</div>
+                   Soyez le premier à commenter cette critique !
+                 </div>
+               )}
+            </div>
+
+            {/* Formulaire de commentaire */}
+            <div className="flex gap-2 pt-4 border-t border-white/10">
+                <input
+                  className="flex-1 bg-black border border-white/20 rounded-full px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-[#00e054] focus:outline-none transition"
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  placeholder={currentUser ? "Écrire un commentaire..." : "Connectez-vous pour commenter"}
+                  disabled={!currentUser}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handlePostComment();
+                    }
+                  }}
+                />
+                <button
+                  onClick={handlePostComment}
+                  disabled={!newComment.trim() || !currentUser}
+                  className="bg-[#00e054] text-black w-12 h-12 rounded-full font-bold flex items-center justify-center hover:bg-[#00c04b] disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  ➤
+                </button>
             </div>
           </div>
         </div>
