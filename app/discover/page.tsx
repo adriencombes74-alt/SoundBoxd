@@ -521,9 +521,9 @@ export default function DiscoverPage() {
 
   // 2. RÉCUPÉRATION DU PREVIEW AUDIO
   const fetchAudioPreview = useCallback(async (albumId: string, albumName?: string, artistName?: string) => {
-    try {
-      const cacheKey = `${albumId}-${albumName}-${artistName}`;
+    const cacheKey = `${albumId}-${albumName}-${artistName}`;
 
+    try {
       // Vérifier le cache d'abord
       if (previewCacheRef.current.has(cacheKey)) {
         const cached = previewCacheRef.current.get(cacheKey);
