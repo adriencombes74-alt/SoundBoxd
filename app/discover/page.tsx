@@ -262,11 +262,14 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
   ) : (
     <div className="text-center">
       <Link href={`/album/${review.album_id}`} className="block group">
-        <h3 className="text-2xl font-bold text-white group-hover:text-[#00e054] transition mb-2">
+        <h3 className="text-xl font-bold text-white group-hover:text-[#00e054] transition mb-2">
           {review.album_name}
         </h3>
-        <p className="text-lg text-gray-300 group-hover:text-white transition">
+        <p className="text-base text-gray-300 group-hover:text-white transition">
           {review.artist_name}
+        </p>
+        <p className="text-xs text-gray-500 mt-1 opacity-75">
+          🎵 Musique découverte
         </p>
       </Link>
     </div>
@@ -411,6 +414,7 @@ export default function DiscoverPage() {
   } | null>(null);
   const lastCardChangeRef = useRef<number>(0);
   const lastAudioStartRef = useRef<number>(0);
+  const previewCacheRef = useRef<Map<string, string | null>>(new Map());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -449,7 +453,7 @@ export default function DiscoverPage() {
           id: track.trackId,
           user_id: 'system',
           album_id: track.collectionId,
-          album_name: track.collectionName || track.trackName,
+          album_name: track.trackName, // Afficher le titre de la musique
           album_image: track.artworkUrl100?.replace('100x100', '600x600') || '',
           artist_name: track.artistName,
           rating: 0,
@@ -518,40 +522,95 @@ export default function DiscoverPage() {
   // 2. RÉCUPÉRATION DU PREVIEW AUDIO
   const fetchAudioPreview = useCallback(async (albumId: string, albumName?: string, artistName?: string) => {
     try {
-      console.log(`🎵 Recherche preview pour "${albumName}" de ${artistName}`);
+      const cacheKey = `${albumId}-${albumName}-${artistName}`;
+
+      // Vérifier le cache d'abord
+      if (previewCacheRef.current.has(cacheKey)) {
+        const cached = previewCacheRef.current.get(cacheKey);
+        console.log(`💾 Cache hit pour "${albumName}": ${cached ? 'trouvé' : 'null'}`);
+        return cached || null;
+      }
+
+      console.log(`🎵 Recherche preview pour "${albumName}" de ${artistName} (ID: ${albumId})`);
 
       let tracks;
 
-      // Essayer d'abord avec l'ID iTunes
+      // Pour les amis : essayer d'abord une recherche directe par titre + artiste
+      if (albumName && artistName) {
+        try {
+          console.log(`🔍 Recherche directe: "${albumName}" par ${artistName}`);
+          const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, '').substring(0, 50);
+          const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=10`);
+          const data = await response.json();
+
+          if (data.results && data.results.length > 0) {
+            // Prendre le premier résultat qui correspond
+            const bestMatch = data.results[0];
+            if (bestMatch.previewUrl) {
+              console.log(`✅ Trouvé directement: "${bestMatch.trackName}"`);
+              previewCacheRef.current.set(cacheKey, bestMatch.previewUrl);
+              return bestMatch.previewUrl;
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Échec recherche directe:', error);
+        }
+
+        // Si la recherche titre + artiste échoue, essayer seulement avec l'artiste
+        try {
+          console.log(`🔍 Recherche par artiste: ${artistName}`);
+          const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&limit=10`);
+          const data = await response.json();
+
+          if (data.results && data.results.length > 0) {
+            // Prendre le premier résultat de cet artiste
+            const artistTrack = data.results[0];
+            if (artistTrack.previewUrl) {
+              console.log(`✅ Trouvé par artiste: "${artistTrack.trackName}"`);
+              previewCacheRef.current.set(cacheKey, artistTrack.previewUrl);
+              return artistTrack.previewUrl;
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Échec recherche par artiste:', error);
+        }
+      }
+
+      // Essayer avec l'ID iTunes (pour les découvertes qui ont des vrais IDs)
       try {
+        console.log(`🔍 Recherche par ID: ${albumId}`);
         const response = await fetch(`https://itunes.apple.com/lookup?id=${albumId}&entity=song&limit=20`);
         const data = await response.json();
 
         if (data.results && data.results.length > 1) {
           tracks = data.results.slice(1);
+          console.log(`📀 Trouvé ${tracks.length} pistes par ID`);
         }
-      } catch {
-        console.log('⚠️ Échec avec ID');
+      } catch (error) {
+        console.log('⚠️ Échec avec ID iTunes:', error);
       }
 
-      // Si ça n'a pas marché, essayer par recherche nom/album
+      // Si ça n'a pas marché, essayer par recherche album
       if (!tracks && albumName && artistName) {
         try {
+          console.log(`🔍 Recherche album: "${albumName}"`);
           const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, '').substring(0, 50);
           const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=album&limit=5`);
           const searchData = await response.json();
 
           if (searchData.results && searchData.results.length > 0) {
             const foundAlbum = searchData.results[0];
+            console.log(`💿 Album trouvé: "${foundAlbum.collectionName}"`);
             const trackResponse = await fetch(`https://itunes.apple.com/lookup?id=${foundAlbum.collectionId}&entity=song&limit=20`);
             const trackData = await trackResponse.json();
 
             if (trackData.results && trackData.results.length > 1) {
               tracks = trackData.results.slice(1);
+              console.log(`🎵 ${tracks.length} pistes trouvées dans l'album`);
             }
           }
-        } catch {
-          console.log('⚠️ Échec recherche');
+        } catch (error) {
+          console.log('⚠️ Échec recherche album:', error);
         }
       }
 
@@ -561,14 +620,17 @@ export default function DiscoverPage() {
         if (validTracks.length > 0) {
           const selectedTrack = validTracks[0];
           console.log(`✅ Trouvé: "${selectedTrack.trackName}"`);
+          previewCacheRef.current.set(cacheKey, selectedTrack.previewUrl);
           return selectedTrack.previewUrl;
         }
       }
 
       console.log('❌ Aucun preview trouvé');
+      previewCacheRef.current.set(cacheKey, null);
       return null;
     } catch (error) {
       console.error('❌ Erreur preview:', error);
+      previewCacheRef.current.set(cacheKey, null);
       return null;
     }
   }, []);
@@ -886,9 +948,12 @@ export default function DiscoverPage() {
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR FLOTTANTE */}
-      <div className="fixed top-2 md:top-4 left-0 right-0 flex justify-center z-50 px-4">
+      <div className="fixed top-2 left-0 right-0 flex justify-center z-50 px-4">
         <nav className="flex items-center justify-between px-4 md:px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            {/* Logo - masqué sur mobile */}
+            {/* Bouton MusicBoxd sur mobile */}
+            <Link href="/" className="md:hidden text-lg font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+
+            {/* Logo desktop - masqué sur mobile */}
             <Link href="/" className="hidden md:block text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
 
             {/* Navigation desktop */}
@@ -910,7 +975,7 @@ export default function DiscoverPage() {
       </div>
 
       {/* ONGLETS AMIS/DÉCOUVRIR */}
-      <div className="fixed top-12 md:top-20 left-0 right-0 flex justify-center z-40 px-4">
+      <div className="fixed top-16 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
@@ -938,7 +1003,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-20 md:pt-24"
+        className="h-screen overflow-y-auto snap-y snap-mandatory pt-24 md:pt-28"
       >
         {currentReviews.length > 0 ? (
           currentReviews.map((review) => (
