@@ -266,7 +266,7 @@ export default function Home() {
                 <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
                     <span className="text-base md:text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
                 </Link>
-                <Link href="/lists/import" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
+                <Link href="/lists/create" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
                     <span className="text-base md:text-lg">📥</span> <span className="hidden sm:inline">Importer</span>
                 </Link>
                 <Link href="/community" className="hover:text-[#00e054] transition hidden md:inline">Communauté</Link>
