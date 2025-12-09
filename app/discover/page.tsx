@@ -875,25 +875,30 @@ export default function DiscoverPage() {
 
       {/* NAVBAR FLOTTANTE */}
       <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+            {/* Logo - masqué sur mobile */}
+            <Link href="/" className="hidden md:block text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+
+            {/* Navigation desktop */}
+            <div className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
                 <Link href="/search" className="hover:text-[#00e054] transition">Albums</Link>
                 <Link href="/discover" className={`transition flex items-center gap-2 ${isAudioEnabled ? 'text-[#00e054]' : 'hover:text-[#00e054] text-white'}`}>⚡ Découvrir</Link>
                 <Link href="/community" className="hover:text-[#00e054] transition">Membres</Link>
-                <button
-                  onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-                  className={`transition text-lg ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-500 hover:text-white'}`}
-                  title={isAudioEnabled ? "Désactiver l'audio automatique" : "Activer l'audio automatique"}
-                >
-                  {isAudioEnabled ? "🔊" : "🔇"}
-                </button>
             </div>
+
+            {/* Bouton audio - toujours visible */}
+            <button
+              onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+              className={`transition text-2xl md:text-lg p-2 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
+              title={isAudioEnabled ? "Désactiver l'audio automatique" : "Activer l'audio automatique"}
+            >
+              {isAudioEnabled ? "🔊" : "🔇"}
+            </button>
         </nav>
       </div>
 
       {/* ONGLETS AMIS/DÉCOUVRIR */}
-      <div className="fixed top-20 left-0 right-0 flex justify-center z-40 px-4">
+      <div className="fixed top-16 md:top-20 left-0 right-0 flex justify-center z-40 px-4">
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
@@ -921,7 +926,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-16"
+        className="h-screen overflow-y-auto snap-y snap-mandatory pt-12 md:pt-16"
       >
         {currentReviews.length > 0 ? (
           currentReviews.map((review) => (
