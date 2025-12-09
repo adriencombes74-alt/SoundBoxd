@@ -410,6 +410,7 @@ export default function DiscoverPage() {
     email?: string;
   } | null>(null);
   const lastCardChangeRef = useRef<number>(0);
+  const lastAudioStartRef = useRef<number>(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -661,6 +662,7 @@ export default function DiscoverPage() {
       // Jouer l'audio
       await audio.play();
       console.log('✅ Lecture démarrée');
+      lastAudioStartRef.current = Date.now();
 
       // Mettre à jour l'état
       setAudioStates(prev => ({
@@ -686,8 +688,17 @@ export default function DiscoverPage() {
   const pauseAudio = useCallback((albumId: string) => {
     const state = audioStates[albumId];
     if (state?.audio && state.isPlaying) {
+      // Protection : ne pas arrêter un audio qui vient de commencer (minimum 2 secondes)
+      const now = Date.now();
+      if (now - lastAudioStartRef.current < 2000) {
+        console.log('⏳ Audio trop récent, pas d\'arrêt');
+        return;
+      }
+
       try {
+        console.log('🛑 Arrêt de l\'audio:', albumId);
         state.audio.pause();
+        state.audio.currentTime = 0;
         setAudioStates(prev => ({
           ...prev,
           [albumId]: { ...state, isPlaying: false }
@@ -720,11 +731,12 @@ export default function DiscoverPage() {
           }
         });
 
-        // Seulement changer si l'utilisateur fait défiler et que les conditions sont remplies
-        if (mostVisibleCard && mostVisibleCard !== currentVisibleCard && maxRatio > 0.7 && isUserScrollingRef.current) {
+        // Changer si une carte devient suffisamment visible et différente de l'actuelle
+        if (mostVisibleCard && mostVisibleCard !== currentVisibleCard && maxRatio > 0.8) {
           const now = Date.now();
-          // Éviter les changements trop fréquents (minimum 800ms entre les changements)
-          if (now - lastCardChangeRef.current > 800) {
+          // Éviter les changements trop fréquents (minimum 1500ms entre les changements)
+          // Et éviter d'interrompre un audio qui vient de commencer (minimum 2000ms depuis le dernier démarrage)
+          if (now - lastCardChangeRef.current > 1500 && now - lastAudioStartRef.current > 2000) {
             console.log(`🎯 Nouvelle carte active: ${mostVisibleCard} (ratio: ${maxRatio})`);
 
             // Arrêter l'ancienne carte
@@ -748,8 +760,8 @@ export default function DiscoverPage() {
       },
       {
         root: containerRef.current,
-        threshold: [0.3, 0.5, 0.7], // Observer plusieurs seuils
-        rootMargin: '-10% 0px -10% 0px' // Marges pour déclencher plus tôt
+        threshold: 0.8, // Seuil unique plus élevé pour éviter les oscillations
+        rootMargin: '0px 0px 0px 0px' // Pas de marges pour une détection plus précise
       }
     );
 
@@ -874,7 +886,7 @@ export default function DiscoverPage() {
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR FLOTTANTE */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
+      <div className="fixed top-2 md:top-4 left-0 right-0 flex justify-center z-50 px-4">
         <nav className="flex items-center justify-between px-4 md:px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
             {/* Logo - masqué sur mobile */}
             <Link href="/" className="hidden md:block text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
@@ -898,7 +910,7 @@ export default function DiscoverPage() {
       </div>
 
       {/* ONGLETS AMIS/DÉCOUVRIR */}
-      <div className="fixed top-16 md:top-20 left-0 right-0 flex justify-center z-40 px-4">
+      <div className="fixed top-12 md:top-20 left-0 right-0 flex justify-center z-40 px-4">
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
@@ -926,7 +938,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-12 md:pt-16"
+        className="h-screen overflow-y-auto snap-y snap-mandatory pt-20 md:pt-24"
       >
         {currentReviews.length > 0 ? (
           currentReviews.map((review) => (
