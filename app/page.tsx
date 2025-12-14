@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-
+import ProfileMenu from '@/components/ui/profile-menu';
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -258,7 +258,11 @@ export default function Home() {
 
       {/* NAVBAR */}
       <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
-        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+      <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300
+    bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150
+    border border-white/10 border-t-white/20
+    shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]
+">
             <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
@@ -271,14 +275,10 @@ export default function Home() {
                 </Link>
                 <Link href="/community" className="hover:text-[#00e054] transition hidden md:inline">Communauté</Link>
                 {user ? (
-                    <Link href="/profile" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
-                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">
-                            {user.email[0].toUpperCase()}
-                        </div>
-                    </Link>
-                ) : (
-                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
-                )}
+                <ProfileMenu user={user} />
+) : (
+    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
+)}
             </div>
         </nav>
       </div>
@@ -309,12 +309,12 @@ export default function Home() {
             <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-6 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-[#00e054] rounded-full"></span> Parcourir par Genre
             </h2>
-            <div className="flex flex-wrap gap-2 md:gap-3">
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 scrollbar-hide">
                 {genres.map((genre) => (
                     <Link
                         key={genre}
                         href={`/search?q=${genre}&type=album`}
-                        className="px-4 md:px-6 py-2 md:py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-105 hover:shadow-lg hover:bg-[#202020]"
+                        className="px-8 md:px-1 py-1 md:py-1 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-110 hover:shadow-lg hover:bg-[#202020]"
                     >
                         {genre}
                     </Link>
@@ -330,9 +330,11 @@ export default function Home() {
             </div>
             {topAlbums.length > 0 ? (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
+                    <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 scrollbar-hide">
                         {topAlbums.slice(0, limitTopAlbums).map((album, index) => (
-                            <TopItemCard key={album.id} item={album} rank={index + 1} type="album" />
+                            <div key={album.id} className="flex-shrink-0 w-32 md:w-40">
+                                <TopItemCard item={album} rank={index + 1} type="album" />
+                            </div>
                         ))}
                     </div>
                     {limitTopAlbums < topAlbums.length && (
@@ -354,9 +356,11 @@ export default function Home() {
             </div>
             {topSongs.length > 0 ? (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
+                    <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 scrollbar-hide">
                         {topSongs.slice(0, limitTopSongs).map((song, index) => (
-                            <TopItemCard key={song.id} item={song} rank={index + 1} type="song" />
+                            <div key={song.id} className="flex-shrink-0 w-32 md:w-40">
+                                <TopItemCard item={song} rank={index + 1} type="song" />
+                            </div>
                         ))}
                     </div>
                     {limitTopSongs < topSongs.length && (
@@ -375,8 +379,8 @@ export default function Home() {
             <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">✨ Derniers Avis</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
-                {loading ? [1,2,3,4,5].map(i => <div key={i} className="h-48 md:h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.slice(0, limitRecent).map(r => <ReviewCard key={r.id} review={r} />)}
+            <div className="flex gap-3 md:gap-6 overflow-x-auto scrollbar-hide">
+                {loading ? [1,2,3,4,5].map(i => <div key={i} className="flex-shrink-0 w-48 md:w-56 h-48 md:h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.slice(0, limitRecent).map(r => <div key={r.id} className="flex-shrink-0 w-48 md:w-56"><ReviewCard review={r} /></div>)}
             </div>
             {recentReviews.length > limitRecent && (
                 <div className="mt-6 md:mt-8 text-center">
@@ -394,8 +398,8 @@ export default function Home() {
                     <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">👥 Activité des Amis</h2>
                 </div>
                 {friendReviews.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
-                        {friendReviews.slice(0, limitFriends).map(r => <ReviewCard key={r.id} review={r} />)}
+                    <div className="flex gap-3 md:gap-6 overflow-x-auto scrollbar-hide">
+                        {friendReviews.slice(0, limitFriends).map(r => <div key={r.id} className="flex-shrink-0 w-48 md:w-56"><ReviewCard review={r} /></div>)}
                     </div>
                 ) : (
                     <div className="text-center py-8 md:py-12 border border-dashed border-white/10 rounded-2xl mx-2 md:mx-0">
@@ -417,8 +421,8 @@ export default function Home() {
 
       {/* MODALE */}
       {selectedReview && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-2 md:p-4 animate-in fade-in duration-200">
-            <div className="bg-[#1a1a1a] p-4 md:p-8 rounded-2xl md:rounded-3xl w-full max-w-sm md:max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/ backdrop-blur-md p-2 md:p-4 animate-in fade-in duration-200">
+            <div className="bg-black/30 backdrop-blur-2xl p-4 md:p-8 rounded-2xl md:rounded-3xl w-full max-w-sm md:max-w-md border border-white/20 shadow-2xl shadow-black/50 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
                 <div className="flex justify-between items-center mb-3 md:mb-4">
                     <h2 className="text-lg md:text-2xl font-bold text-white pr-2">{selectedReview.album_name}</h2>
                     <button onClick={() => setSelectedReview(null)} className="text-gray-500 hover:text-white text-xl md:text-2xl">✕</button>
@@ -427,21 +431,36 @@ export default function Home() {
 
                 <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 max-h-48 md:max-h-60 mb-4 md:mb-6">
                      {comments.map(c => (
-                        <div key={c.id} className="flex gap-2 md:gap-3">
-                            <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/10 text-gray-400">
+                        <div key={c.id} className="flex gap-3 md:gap-4">
+                            <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/[0.06] backdrop-blur-xl flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/15 shadow-lg shadow-black/10 text-gray-400">
                                 {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
                             </div>
-                            <div>
-                                <span className="text-[10px] md:text-xs font-bold text-white">{c.profiles?.username}</span>
-                                <p className="text-[10px] md:text-xs text-gray-400">{c.content}</p>
+                            <div className="flex-1">
+                                <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-2xl px-3 py-2 md:px-4 md:py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300">
+                                    <div className="text-[10px] md:text-xs font-bold text-white mb-1">{c.profiles?.username}</div>
+                                    <div className="text-[10px] md:text-xs text-gray-300 leading-relaxed">{c.content}</div>
+                                </div>
                             </div>
                         </div>
                      ))}
                 </div>
 
-                <div className="flex gap-2">
-                    <input className="flex-1 bg-black border border-gray-700 rounded-full px-3 md:px-4 py-2 text-white text-xs md:text-sm" value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Commenter..." />
-                    <button onClick={postComment} className="bg-[#00e054] text-black px-3 md:px-4 rounded-full font-bold text-sm md:text-base">➤</button>
+                <div className="flex gap-3">
+                    <div className="flex-1 bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-full px-4 py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300 focus-within:border-[#00e054]/40 focus-within:bg-white/[0.15]">
+                        <input
+                            className="w-full bg-transparent text-white text-xs md:text-sm placeholder-gray-400 outline-none"
+                            value={newComment}
+                            onChange={e => setNewComment(e.target.value)}
+                            placeholder="Ajouter un commentaire..."
+                            onKeyPress={e => e.key === 'Enter' && postComment()}
+                        />
+                    </div>
+                    <button
+                        onClick={postComment}
+                        className="bg-[#00e054] hover:bg-[#00e054]/80 text-black px-4 py-3 rounded-full font-bold text-sm md:text-base shadow-lg shadow-[#00e054]/20 hover:shadow-xl hover:shadow-[#00e054]/30 transition-all duration-300 hover:scale-105"
+                    >
+                        ➤
+                    </button>
                 </div>
             </div>
         </div>

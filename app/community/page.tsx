@@ -1,14 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 export default function CommunityPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    checkUser();
+  }, []);
 
   const searchUsers = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +48,32 @@ export default function CommunityPage() {
       <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
       <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
+      {/* --- FOND ALBUM ICÔNIQUE (THE DARK SIDE OF THE MOON) --- */}
+      <div className="absolute top-0 inset-x-0 h-[70vh] w-full z-0 overflow-hidden pointer-events-none">
+        <img src="https://upload.wikimedia.org/wikipedia/en/3/3b/Dark_Side_of_the_Moon.png" 
+          className="w-full h-full object-cover blur-[10px] scale-125 opacity-70 animate-in fade-in duration-1000" 
+          alt="The Dark Side of the Moon cover" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-[#050505]/60 to-[#050505]" />
+      </div>
+
       {/* --- NAVBAR FLOTTANTE --- */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="text-gray-300 hover:text-[#00e054] transition">Albums</Link>
-                <Link href="/profile" className="text-gray-300 hover:text-white transition">Mon Profil</Link>
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+                <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
+                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+                </Link>
+                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+                </Link>
+                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+                {user ? (
+                    <ProfileMenu user={user} />
+                ) : (
+                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
+                )}
             </div>
         </nav>
       </div>
@@ -66,7 +95,7 @@ export default function CommunityPage() {
                 <input
                     type="text"
                     placeholder="Rechercher un membre par pseudo..."
-                    className="w-full bg-[#0a0a0a] border border-white/10 text-white px-8 py-5 rounded-full focus:outline-none focus:border-[#00e054] text-lg placeholder-gray-600 shadow-2xl transition-all"
+                    className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-2xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-200 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                 />

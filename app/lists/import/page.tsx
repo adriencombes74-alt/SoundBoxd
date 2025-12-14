@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { matchTracksToItunes, type TrackInput, type MatchedTrack } from '@/lib/itunesMatcher';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 export default function ImportPlaylistPage() {
   const router = useRouter();
@@ -183,7 +184,7 @@ export default function ImportPlaylistPage() {
 
       {/* NAVBAR */}
       <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+        <nav className="flex items-center justify-between px-8 py-3 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] rounded-full w-full max-w-5xl">
             <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
             <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
                 <Link href="/search" className="hover:text-[#00e054] transition">Albums</Link>
@@ -191,11 +192,7 @@ export default function ImportPlaylistPage() {
                 <Link href="/lists/import" className="hover:text-[#00e054] transition flex items-center gap-2">📥 Importer</Link>
                 <Link href="/community" className="hover:text-[#00e054] transition">Membres</Link>
                 {currentUser ? (
-                    <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs">
-                            {currentUser?.email?.[0]?.toUpperCase() || '?'}
-                        </div>
-                    </Link>
+                    <ProfileMenu user={currentUser} />
                 ) : (
                     <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
                 )}
@@ -216,7 +213,7 @@ export default function ImportPlaylistPage() {
         </div>
 
         {/* ÉTAPE 1: COLLAGE DU TEXTE */}
-        <div className="bg-[#121212] p-8 rounded-3xl border border-white/5 mb-8">
+        <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl border border-white/15 shadow-lg shadow-black/20 mb-8">
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
             <span className="w-8 h-8 bg-[#00e054] text-black rounded-full flex items-center justify-center font-black text-sm">1</span>
             Coller votre playlist
@@ -233,7 +230,7 @@ Pink Floyd - Comfortably Numb
 David Bowie - Heroes
 
 Un titre par ligne, format "Artiste - Titre"`}
-            className="w-full h-64 bg-black border border-white/10 rounded-2xl p-6 text-white placeholder-gray-500 focus:border-[#00e054] focus:outline-none resize-none font-mono text-sm"
+            className="w-full h-64 bg-white/10 backdrop-blur-lg border border-white/15 rounded-2xl p-6 text-white placeholder-gray-500 focus:border-[#00e054] focus:outline-none resize-none font-mono text-sm transition-all duration-300"
             disabled={isAnalyzing}
           />
 
@@ -269,7 +266,7 @@ Un titre par ligne, format "Artiste - Titre"`}
 
         {/* ÉTAPE 2: RÉSULTATS DE L'ANALYSE */}
         {matchedTracks.length > 0 && (
-          <div className="bg-[#121212] p-8 rounded-3xl border border-white/5 mb-8">
+          <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl border border-white/15 shadow-lg shadow-black/20 mb-8">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
               <span className="w-8 h-8 bg-[#00e054] text-black rounded-full flex items-center justify-center font-black text-sm">2</span>
               Résultats ({successCount}/{totalCount} trouvés - {successRate}%)
@@ -277,15 +274,15 @@ Un titre par ligne, format "Artiste - Titre"`}
 
             {/* STATS */}
             <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-green-900/20 border border-green-900/30 rounded-xl p-4 text-center">
+              <div className="bg-green-900/30 backdrop-blur-lg border border-green-900/40 rounded-xl p-4 text-center shadow-md">
                 <div className="text-2xl font-black text-green-400">{successCount}</div>
                 <div className="text-xs text-green-300 uppercase tracking-widest">Trouvés</div>
               </div>
-              <div className="bg-red-900/20 border border-red-900/30 rounded-xl p-4 text-center">
+              <div className="bg-red-900/30 backdrop-blur-lg border border-red-900/40 rounded-xl p-4 text-center shadow-md">
                 <div className="text-2xl font-black text-red-400">{totalCount - successCount}</div>
                 <div className="text-xs text-red-300 uppercase tracking-widest">Non trouvés</div>
               </div>
-              <div className="bg-blue-900/20 border border-blue-900/30 rounded-xl p-4 text-center">
+              <div className="bg-blue-900/30 backdrop-blur-lg border border-blue-900/40 rounded-xl p-4 text-center shadow-md">
                 <div className="text-2xl font-black text-blue-400">{successRate}%</div>
                 <div className="text-xs text-blue-300 uppercase tracking-widest">Taux de succès</div>
               </div>
@@ -339,7 +336,7 @@ Un titre par ligne, format "Artiste - Titre"`}
 
         {/* ÉTAPE 3: SAUVEGARDE */}
         {matchedTracks.some(t => t.matchFound) && (
-          <div className="bg-[#121212] p-8 rounded-3xl border border-white/5">
+          <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl border border-white/15 shadow-lg shadow-black/20">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
               <span className="w-8 h-8 bg-[#00e054] text-black rounded-full flex items-center justify-center font-black text-sm">3</span>
               Sauvegarder la liste
@@ -351,14 +348,14 @@ Un titre par ligne, format "Artiste - Titre"`}
                 value={playlistTitle}
                 onChange={(e) => setPlaylistTitle(e.target.value)}
                 placeholder="Nom de votre playlist"
-                className="w-full bg-black border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:border-[#00e054] focus:outline-none mb-6"
+                className="w-full bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-4 text-white placeholder-gray-500 focus:border-[#00e054] focus:outline-none mb-6 transition-all duration-300"
                 disabled={isSaving}
               />
 
               <button
                 onClick={savePlaylist}
                 disabled={isSaving || !playlistTitle.trim()}
-                className="w-full py-4 bg-[#00e054] hover:bg-[#00c04b] disabled:opacity-50 disabled:cursor-not-allowed text-black font-black rounded-xl transition uppercase tracking-widest flex items-center justify-center gap-3"
+                className="w-full py-4 bg-[#00e054] hover:bg-[#00e054]/80 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black rounded-xl transition-all duration-300 hover:scale-105 shadow-xl shadow-[#00e054]/20 uppercase tracking-widest flex items-center justify-center gap-3"
               >
                 {isSaving ? (
                   <>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 export default function AlbumPage({ params }: { params: any }) {
   const router = useRouter();
@@ -236,26 +237,30 @@ export default function AlbumPage({ params }: { params: any }) {
       <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
             <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="text-white hover:text-[#00e054] transition">← Retour</Link>
-                <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
+            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+                <Link href="/search" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">←</span> <span className="hidden sm:inline">Albums</span>
+                </Link>
+                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+                </Link>
+                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+                </Link>
+                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
                 {playingTrack && (
                     <div className="flex items-center gap-2 text-[#00e054] animate-pulse">
                         <span className="text-lg">🎵</span>
-                        <span className="hidden sm:inline">Lecture en cours</span>
+                        <span className="hidden sm:inline">Lecture</span>
                     </div>
                 )}
                 {currentUser ? (
-                    <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
-                            {currentUser.email[0].toUpperCase()}
-                        </div>
-                    </Link>
+                    <ProfileMenu user={currentUser} />
                 ) : (
-                    <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
+                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
                 )}
             </div>
         </nav>
@@ -263,7 +268,7 @@ export default function AlbumPage({ params }: { params: any }) {
 
       {/* HEADER ALBUM */}
       <header className="relative w-full h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a]">
-        <img src={highResImage} className="absolute inset-0 w-full h-full object-cover opacity-30 blur-3xl scale-110 pointer-events-none" />
+        <img src={highResImage} className="absolute inset-0 w-full h-full object-cover opacity-70 blur-2xl scale-110 pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
 
         <div className="relative z-10 max-w-6xl mx-auto w-full px-6 py-12 flex flex-col md:flex-row gap-10 items-end">
@@ -417,8 +422,8 @@ export default function AlbumPage({ params }: { params: any }) {
 
       {/* MODALE DE NOTATION */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-black/30 backdrop-blur-1xl p-8 rounded-3xl w-full max-w-md border border-white/20 shadow-2xl shadow-black/50 animate-in zoom-in-95">
                 <div className="flex justify-between items-center mb-2">
                     <h2 className="text-2xl font-black text-white">
                         Noter {ratingTarget === 'album' ? "l'album" : "le titre"}
@@ -430,14 +435,14 @@ export default function AlbumPage({ params }: { params: any }) {
                     <p className="text-[#00e054] text-sm font-bold mb-8 uppercase tracking-wide border-l-2 border-[#00e054] pl-3">{ratingTarget.trackName}</p>
                 )}
 
-                <div className="flex justify-center mb-8 gap-2 bg-black/50 p-4 rounded-2xl">
+                <div className="flex justify-center mb-8 gap-2 bg-white/[0.06] backdrop-blur-lg p-4 rounded-2xl border border-white/10 shadow-lg shadow-black/10">
                     {[1, 2, 3, 4, 5].map((star) => (
                         <button key={star} onClick={() => setUserRating(star)} onMouseEnter={() => setUserRating(star)} className={`text-5xl transition transform hover:scale-110 focus:outline-none ${star <= userRating ? 'text-[#00e054] drop-shadow-[0_0_10px_rgba(0,224,84,0.5)]' : 'text-gray-800'}`}>★</button>
                     ))}
                 </div>
 
                 <textarea
-                    className="w-full bg-[#0a0a0a] border border-gray-800 rounded-2xl p-4 text-white focus:border-[#00e054] focus:outline-none mb-6 h-32 resize-none text-sm placeholder-gray-600"
+                    className="w-full bg-black/30 backdrop-blur-xl border border-white/15 rounded-2xl p-4 text-white focus:border-[#00e054]/40 focus:bg-black/40 focus:outline-none mb-6 h-32 resize-none text-sm placeholder-gray-500 shadow-lg shadow-black/10 transition-all duration-300"
                     placeholder="Votre avis (optionnel)..."
                     value={reviewText}
                     onChange={(e) => setReviewText(e.target.value)}

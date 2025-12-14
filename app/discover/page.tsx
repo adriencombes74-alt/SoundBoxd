@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 interface Review {
   id: number;
@@ -70,11 +71,32 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
   useEffect(() => {
     const fetchSocialData = async () => {
       try {
+        // Pour les découvertes système, chercher une review existante de l'utilisateur
+        let reviewId = review.id;
+        
+        if (review.user_id === 'system' && currentUser) {
+          const { data: existingReview } = await supabase
+            .from('reviews')
+            .select('id')
+            .eq('album_id', review.album_id)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+          
+          if (existingReview) {
+            reviewId = existingReview.id;
+          } else {
+            // Pas de review, donc pas de likes/commentaires
+            setLikesCount(0);
+            setHasLiked(false);
+            return;
+          }
+        }
+
         // Charger le nombre de likes
         const { count: likesCount } = await supabase
           .from('likes')
           .select('*', { count: 'exact', head: true })
-          .eq('review_id', review.id);
+          .eq('review_id', reviewId);
 
         setLikesCount(likesCount || 0);
 
@@ -83,9 +105,9 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
           const { data: userLike } = await supabase
             .from('likes')
             .select('id')
-            .eq('review_id', review.id)
+            .eq('review_id', reviewId)
             .eq('user_id', currentUser.id)
-            .single();
+            .maybeSingle();
 
           setHasLiked(!!userLike);
         }
@@ -95,20 +117,40 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     };
 
     fetchSocialData();
-  }, [review.id, currentUser]);
+  }, [review.id, review.album_id, review.user_id, currentUser]);
 
   // Charger les commentaires quand on ouvre la modale
   useEffect(() => {
     if (showComments) {
       const fetchComments = async () => {
         try {
-        const { data } = await supabase
-          .from('comments')
-          .select('*, profiles(username, avatar_url)')
-          .eq('review_id', review.id)
-          .order('created_at', { ascending: true });
+          // Pour les découvertes système, chercher une review existante
+          let reviewId = review.id;
+          
+          if (review.user_id === 'system' && currentUser) {
+            const { data: existingReview } = await supabase
+              .from('reviews')
+              .select('id')
+              .eq('album_id', review.album_id)
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+            
+            if (existingReview) {
+              reviewId = existingReview.id;
+            } else {
+              // Pas de review, donc pas de commentaires
+              setComments([]);
+              return;
+            }
+          }
 
-        setComments((data || []) as typeof comments);
+          const { data } = await supabase
+            .from('comments')
+            .select('*, profiles(username, avatar_url)')
+            .eq('review_id', reviewId)
+            .order('created_at', { ascending: true });
+
+          setComments((data || []) as typeof comments);
         } catch (error) {
           console.error('Erreur lors du chargement des commentaires:', error);
         }
@@ -116,7 +158,50 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
 
       fetchComments();
     }
-  }, [showComments, review.id]);
+  }, [showComments, review.id, review.album_id, review.user_id, currentUser]);
+
+  // Créer ou récupérer une review pour les découvertes
+  const ensureReviewExists = async () => {
+    // Si la review a déjà un ID réel (pas system), on retourne directement
+    if (review.user_id !== 'system') {
+      return review.id;
+    }
+
+    // Vérifier si une review existe déjà pour cet album/track
+    const { data: existingReview } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('album_id', review.album_id)
+      .eq('user_id', currentUser!.id)
+      .maybeSingle();
+
+    if (existingReview) {
+      return existingReview.id;
+    }
+
+    // Créer une nouvelle review "découverte" pour cet utilisateur
+    const { data: newReview, error } = await supabase
+      .from('reviews')
+      .insert({
+        user_id: currentUser!.id,
+        user_name: currentUser!.email?.split('@')[0] || 'user',
+        album_id: review.album_id,
+        album_name: review.album_name,
+        album_image: review.album_image,
+        artist_name: review.artist_name,
+        rating: 0, // Pas de note pour une découverte
+        review_text: '', // Pas de texte pour une découverte
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Erreur création review:', error);
+      throw error;
+    }
+
+    return newReview.id;
+  };
 
   const handleLike = async () => {
     if (!currentUser) {
@@ -132,13 +217,16 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     setLikesCount(prev => hasLiked ? prev - 1 : prev + 1);
 
     try {
+      // S'assurer qu'une review existe
+      const reviewId = await ensureReviewExists();
+
       if (previousHasLiked) {
         // Supprimer le like
         const { error } = await supabase
           .from('likes')
           .delete()
           .eq('user_id', currentUser.id)
-          .eq('review_id', review.id);
+          .eq('review_id', reviewId);
 
         if (error) throw error;
       } else {
@@ -147,7 +235,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
           .from('likes')
           .insert({
             user_id: currentUser.id,
-            review_id: review.id
+            review_id: reviewId
           });
 
         if (error) throw error;
@@ -169,11 +257,14 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     }
 
     try {
+      // S'assurer qu'une review existe
+      const reviewId = await ensureReviewExists();
+
       const { data, error } = await supabase
         .from('comments')
         .insert({
           user_id: currentUser.id,
-          review_id: review.id,
+          review_id: reviewId,
           content: newComment.trim()
         })
         .select('*, profiles(username, avatar_url)')
@@ -192,83 +283,50 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
   };
 
   // Déterminer le contenu de l'overlay selon le type de review
-  const overlayContent = review.review_text ? (
-    <div className="flex items-start justify-between gap-6">
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-3">
-          <Link href={`/user/${review.profiles.username}`} className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg font-bold text-black overflow-hidden">
-              {review.profiles.avatar_url ? (
-                <img src={review.profiles.avatar_url} alt={`Avatar de ${review.profiles.username}`} className="w-full h-full object-cover" />
-              ) : (
-                review.profiles.username[0].toUpperCase()
-              )}
-            </div>
-            <span className="font-bold text-white group-hover:text-[#00e054] transition">
-              {review.profiles.username}
-            </span>
-          </Link>
-        </div>
-
-        <h3 className="text-xl font-bold text-white mb-2">
-          {review.album_name} - {review.artist_name}
-        </h3>
-
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-[#00e054] font-bold text-lg">
-            {"★".repeat(review.rating)}
-          </span>
-          <span className="text-gray-400 text-sm">
-            {new Date(review.created_at).toLocaleDateString('fr-FR')}
-          </span>
-        </div>
-
-        <p className="text-gray-300 text-sm leading-relaxed italic max-w-2xl">
-          &ldquo;{review.review_text}&rdquo;
-        </p>
-      </div>
-
-      {/* ACTIONS DROITE */}
-      <div className="flex flex-col items-center gap-6">
-        <button
-          onClick={handleLike}
-          className={`p-4 rounded-full border-2 transition-all ${
-            hasLiked
-              ? 'bg-[#00e054] border-[#00e054] text-black'
-              : 'border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054]'
-          }`}
-        >
-          <div className="flex flex-col items-center">
-            <span className="text-2xl">{hasLiked ? '♥' : '♡'}</span>
-            <span className="text-xs mt-1 font-bold">{likesCount}</span>
+  const infoContent = review.review_text ? (
+    <>
+      <div className="flex items-center gap-3 mb-3">
+        <Link href={`/user/${review.profiles.username}`} className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg font-bold text-black overflow-hidden">
+            {review.profiles.avatar_url ? (
+              <img src={review.profiles.avatar_url} alt={`Avatar de ${review.profiles.username}`} className="w-full h-full object-cover" />
+            ) : (
+              review.profiles.username[0].toUpperCase()
+            )}
           </div>
-        </button>
-
-        <button
-          onClick={() => setShowComments(true)}
-          className="p-4 rounded-full border-2 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] transition-all"
-        >
-          <span className="text-2xl">💬</span>
-        </button>
-
-        <Link
-          href={`/album/${review.album_id}`}
-          className="p-4 rounded-full border-2 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] transition-all"
-        >
-          <span className="text-2xl">👁️</span>
+          <span className="font-bold text-white group-hover:text-[#00e054] transition">
+            {review.profiles.username}
+          </span>
         </Link>
       </div>
-    </div>
+
+      <h3 className="text-xl font-bold text-white mb-2">
+        {review.album_name} - {review.artist_name}
+      </h3>
+
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[#00e054] font-bold text-lg">
+          {"★".repeat(review.rating)}
+        </span>
+        <span className="text-gray-400 text-sm">
+          {new Date(review.created_at).toLocaleDateString('fr-FR')}
+        </span>
+      </div>
+
+      <p className="text-gray-300 text-sm leading-relaxed italic max-w-2xl">
+        &ldquo;{review.review_text}&rdquo;
+      </p>
+    </>
   ) : (
     <div className="text-center">
       <Link href={`/album/${review.album_id}`} className="block group">
-        <h3 className="text-xl font-bold text-white group-hover:text-[#00e054] transition mb-2">
+        <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-[#00e054] transition mb-2">
           {review.album_name}
         </h3>
-        <p className="text-base text-gray-300 group-hover:text-white transition">
+        <p className="text-base md:text-lg text-gray-300 group-hover:text-white transition">
           {review.artist_name}
         </p>
-        <p className="text-xs text-gray-500 mt-1 opacity-75">
+        <p className="text-xs text-gray-500 mt-2 opacity-75">
           🎵 Musique découverte
         </p>
       </Link>
@@ -328,8 +386,49 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         </div>
 
         {/* OVERLAY BAS : INFOS DE LA CRITIQUE */}
-        <div className="absolute bottom-8 left-6 right-6 bg-black/60 backdrop-blur-xl rounded-3xl p-6 border border-white/10">
-          {overlayContent}
+        <div className="absolute bottom-8 left-6 right-6">
+          <div className="bg-white/[0.03] backdrop-blur-3xl backdrop-saturate-150 rounded-3xl p-4 md:p-6 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+            {infoContent}
+          </div>
+        </div>
+
+        {/* ACTIONS DROITE (Style Instagram Reels) */}
+        <div className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 md:gap-5">
+          <button
+            onClick={handleLike}
+            className={`p-3 md:p-4 rounded-full border-2 transition-all backdrop-blur-xl shadow-lg ${
+              hasLiked
+                ? 'bg-[#00e054] border-[#00e054] text-black'
+                : 'bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60'
+            }`}
+            title={hasLiked ? "Retirer le like" : "Aimer"}
+          >
+            <div className="flex flex-col items-center">
+              <span className="text-2xl md:text-3xl">{hasLiked ? '♥' : '♡'}</span>
+              <span className="text-xs mt-1 font-bold">{likesCount}</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setShowComments(true)}
+            className="p-3 md:p-4 rounded-full border-2 bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60 transition-all backdrop-blur-xl shadow-lg"
+            title="Commenter"
+          >
+            <div className="flex flex-col items-center">
+              <span className="text-2xl md:text-3xl">💬</span>
+              {comments.length > 0 && (
+                <span className="text-xs mt-1 font-bold">{comments.length}</span>
+              )}
+            </div>
+          </button>
+
+          <Link
+            href={`/album/${review.album_id}`}
+            className="p-3 md:p-4 rounded-full border-2 bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60 transition-all backdrop-blur-xl shadow-lg"
+            title="Voir l'album"
+          >
+            <span className="text-2xl md:text-3xl">👁️</span>
+          </Link>
         </div>
       </div>
 
@@ -948,34 +1047,42 @@ export default function DiscoverPage() {
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR FLOTTANTE */}
-      <div className="fixed top-2 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-4 md:px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            {/* Bouton MusicBoxd sur mobile */}
-            <Link href="/" className="md:hidden text-lg font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-
-            {/* Logo desktop - masqué sur mobile */}
-            <Link href="/" className="hidden md:block text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-
-            {/* Navigation desktop */}
-            <div className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
-                <Link href="/search" className="hover:text-[#00e054] transition">Albums</Link>
-                <Link href="/discover" className={`transition flex items-center gap-2 ${isAudioEnabled ? 'text-[#00e054]' : 'hover:text-[#00e054] text-white'}`}>⚡ Découvrir</Link>
-                <Link href="/community" className="hover:text-[#00e054] transition">Membres</Link>
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+            
+            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+                <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
+                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+                </Link>
+                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+                </Link>
+                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+                
+                {/* Bouton audio */}
+                <button
+                  onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+                  className={`transition text-lg md:text-base p-1.5 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
+                  title={isAudioEnabled ? "Désactiver l'audio" : "Activer l'audio"}
+                >
+                  {isAudioEnabled ? "🔊" : "🔇"}
+                </button>
+                
+                {user ? (
+                    <ProfileMenu user={user} />
+                ) : (
+                    <Link href="/login" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">?</div>
+                    </Link>
+                )}
             </div>
-
-            {/* Bouton audio - toujours visible */}
-            <button
-              onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-              className={`transition text-2xl md:text-lg p-2 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
-              title={isAudioEnabled ? "Désactiver l'audio automatique" : "Activer l'audio automatique"}
-            >
-              {isAudioEnabled ? "🔊" : "🔇"}
-            </button>
         </nav>
       </div>
 
       {/* ONGLETS AMIS/DÉCOUVRIR */}
-      <div className="fixed top-16 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
+      <div className="fixed top-20 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
@@ -1003,7 +1110,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-24 md:pt-28"
+        className="h-screen overflow-y-auto snap-y snap-mandatory pt-32 md:pt-36"
       >
         {currentReviews.length > 0 ? (
           currentReviews.map((review) => (

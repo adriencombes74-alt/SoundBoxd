@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 export default function ArtistPage({ params }: { params: any }) {
   const router = useRouter();
@@ -89,11 +90,7 @@ export default function ArtistPage({ params }: { params: any }) {
                 <Link href="/search" className="text-white hover:text-[#00e054] transition">← Retour</Link>
                 <Link href="/community" className="hover:text-[#00e054] transition hidden sm:inline">Communauté</Link>
                 {user ? (
-                    <Link href="/profile" className="flex items-center gap-3 pl-4 border-l border-white/10 hover:opacity-80 transition group">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-xs border border-white/20">
-                            {user.email[0].toUpperCase()}
-                        </div>
-                    </Link>
+                    <ProfileMenu user={user} />
                 ) : (
                     <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition">Connexion</Link>
                 )}

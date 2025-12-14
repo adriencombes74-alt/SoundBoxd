@@ -4,10 +4,20 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import ProfileMenu from '@/components/ui/profile-menu';
 
 // 1. ON CRÉE UN COMPOSANT INTERNE POUR LE CONTENU
 function SearchContent() {
   const searchParams = useSearchParams();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    checkUser();
+  }, []);
   
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -95,20 +105,25 @@ function SearchContent() {
       <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-4">
-        <nav className="flex items-center justify-between px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl w-full max-w-5xl">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
+      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4 text-[10px] md:text-xs font-bold uppercase tracking-widest">
                 {hasSearched && (
-                    <button onClick={clearSearch} className="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white transition mr-4">
+                    <button onClick={clearSearch} className="text-gray-400 hover:text-white transition">
                         ✕ Fermer
                     </button>
                 )}
-                <Link href="/" className="text-xs font-bold uppercase tracking-widest hover:text-[#00e054] transition">
-                    Retour Accueil
+                <Link href="/" className="hover:text-[#00e054] transition hidden sm:inline">
+                    Accueil
                 </Link>
+                {user ? (
+                    <ProfileMenu user={user} />
+                ) : (
+                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
+                )}
             </div>
         </nav>
       </div>
