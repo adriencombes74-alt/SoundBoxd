@@ -1,5 +1,40 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* RENDU APPLICATION MOBILE */
+html, body {
+  /* Empêche le rebond élastique (Rubber banding) sur iOS */
+  overscroll-behavior-y: none;
+  /* Empêche le zoom par double tap */
+  touch-action: pan-x pan-y;
+  /* Couleur de fond pour éviter les flashs blancs */
+  background-color: #050505;
+}
+
+/* Empêche la sélection de texte partout (comme une vraie app) */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent; /* Enlève le flash bleu au clic */
+}
+
+/* On réactive la sélection de texte juste pour les inputs et paragraphes importants */
+input, textarea, p {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ... le reste de votre CSS ... */
+@layer utilities {
+  .glass-panel {
+    @apply bg-[#1a1a1a]/60 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] text-white;
+  }
+  .glass-panel-hover {
+    @apply transition-all duration-300 hover:bg-[#1a1a1a]/80 hover:border-white/20 hover:shadow-[0_8px_32px_0_rgba(0,224,84,0.1)] hover:-translate-y-1;
+  }
+}
 :root {
   --background: #ffffff;
   --foreground: #171717;
