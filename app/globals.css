@@ -3,30 +3,52 @@
 @tailwind components;
 @tailwind utilities;
 
-/* RENDU APPLICATION MOBILE */
-html, body {
-  /* Empêche le rebond élastique (Rubber banding) sur iOS */
-  overscroll-behavior-y: none;
-  /* Empêche le zoom par double tap */
-  touch-action: pan-x pan-y;
-  /* Couleur de fond pour éviter les flashs blancs */
-  background-color: #050505;
+/* RENDU APPLICATION MOBILE OPTIMISÉ */
+html {
+  /* Bloque le scroll horizontal au niveau racine */
+  overflow-x: hidden;
+  /* Fixe la hauteur pour éviter les sauts */
+  height: 100%;
 }
 
-/* Empêche la sélection de texte partout (comme une vraie app) */
 body {
+  /* Empêche le rebond élastique (Rubber banding) sur iOS */
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none; /* Bloque le rebond horizontal */
+  
+  /* Empêche le zoom et le scroll horizontal involontaire sur tout le corps */
+  /* 'pan-y' signifie : on autorise seulement le scroll vertical */
+  touch-action: pan-y;
+  
+  /* Couleur de fond pour éviter les flashs blancs */
+  background-color: #050505;
+  
+  /* Assure que le body ne déborde jamais horizontalement */
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  min-height: 100%;
+  
+  /* Empêche la sélection de texte partout */
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent; /* Enlève le flash bleu au clic */
 }
 
-/* On réactive la sélection de texte juste pour les inputs et paragraphes importants */
-input, textarea, p {
+/* On réactive la sélection de texte juste pour les inputs et zones de texte */
+input, textarea, [contenteditable="true"] {
   -webkit-user-select: text;
   user-select: text;
 }
 
-/* ... le reste de votre CSS ... */
+/* Pour les éléments qui DOIVENT scroller horizontalement (comme vos listes) */
+/* Ajoutez la classe 'scroll-x-enable' si besoin sur des divs spécifiques */
+.scroll-x-enable {
+  touch-action: pan-x;
+  overflow-x: auto;
+}
+
+/* ... le reste de votre CSS (Design) ... */
 @layer utilities {
   .glass-panel {
     @apply bg-[#1a1a1a]/60 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] text-white;
