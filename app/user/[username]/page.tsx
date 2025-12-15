@@ -13,12 +13,13 @@ export default function PublicProfilePage({ params }: { params: any }) {
   // Données
   const [reviews, setReviews] = useState<any[]>([]);
   const [lists, setLists] = useState<any[]>([]);
+  const [likedAlbums, setLikedAlbums] = useState<any[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [reviewsCount, setReviewsCount] = useState(0);
   
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'reviews' | 'lists'>('reviews');
+  const [activeTab, setActiveTab] = useState<'reviews' | 'lists' | 'likes'>('reviews');
 
   // Gestion Next.js 15
   useEffect(() => {
@@ -67,6 +68,14 @@ export default function PublicProfilePage({ params }: { params: any }) {
       .eq('user_id', profileData.id)
       .order('created_at', { ascending: false });
     setLists(listsData || []);
+
+    // 3.5. Récupérer les albums likés
+    const { data: likedAlbumsData } = await supabase
+      .from('album_likes')
+      .select('*')
+      .eq('user_id', profileData.id)
+      .order('created_at', { ascending: false });
+    setLikedAlbums(likedAlbumsData || []);
 
     // 4. Récupérer le nombre d'abonnés
     const { count: followCount } = await supabase
@@ -269,7 +278,7 @@ export default function PublicProfilePage({ params }: { params: any }) {
 
         {/* --- ONGLETS NAVIGATION (Style Instagram) --- */}
         <div className="border-t border-white/10 mb-8 md:mb-12">
-            <div className="flex justify-center gap-12 md:gap-16">
+            <div className="flex justify-center gap-8 md:gap-12">
                 <button
                     onClick={() => setActiveTab('reviews')}
                     className={`flex items-center gap-2 py-4 px-2 border-t-2 -mt-px transition-all ${
@@ -299,6 +308,19 @@ export default function PublicProfilePage({ params }: { params: any }) {
                         <path d="M3 9h18M9 21V9" />
                     </svg>
                     <span className="text-xs md:text-sm font-bold uppercase tracking-widest">Listes</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('likes')}
+                    className={`flex items-center gap-2 py-4 px-2 border-t-2 -mt-px transition-all ${
+                        activeTab === 'likes'
+                            ? 'border-[#00e054] text-white'
+                            : 'border-transparent text-white/40 hover:text-white/70'
+                    }`}
+                >
+                    <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                    <span className="text-xs md:text-sm font-bold uppercase tracking-widest">Likes</span>
                 </button>
             </div>
         </div>
@@ -395,6 +417,39 @@ export default function PublicProfilePage({ params }: { params: any }) {
                         ))}
                     </div>
                 )}
+            </section>
+        )}
+
+        {activeTab === 'likes' && (
+            <section>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 md:mb-8">
+                    <h2 className="text-xl md:text-2xl font-black text-white">Ses Likes</h2>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                    {likedAlbums.length > 0 ? likedAlbums.map((like) => (
+                        <Link key={like.id} href={`/album/${like.album_id}`} className="group block">
+                            <div className="relative aspect-square overflow-hidden rounded-2xl shadow-lg bg-[#121212] mb-3 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300">
+                                <img 
+                                    src={like.album_image?.replace('100x100', '400x400')} 
+                                    alt={like.album_name} 
+                                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500 group-hover:scale-110"
+                                />
+                                <div className="absolute top-2 right-2 w-8 h-8 bg-[#00e054]/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg">
+                                    <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <h3 className="font-bold text-xs text-white truncate group-hover:text-[#00e054] transition">{like.album_name}</h3>
+                            <p className="text-[10px] text-gray-400 truncate uppercase tracking-wide">{like.artist_name}</p>
+                        </Link>
+                    )) : (
+                        <div className="col-span-2 md:col-span-4 lg:col-span-5 p-12 md:p-16 border border-dashed border-white/10 rounded-3xl text-center text-white/30 text-sm">
+                            <div className="text-4xl mb-4 opacity-50">❤️</div>
+                            <p>Aucun album liké.</p>
+                        </div>
+                    )}
+                </div>
             </section>
         )}
 

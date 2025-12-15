@@ -24,8 +24,9 @@ export default function CreateListPage() {
     year?: number;
   };
   
-  // États Import Spotify
-  const [spotifyUrl, setSpotifyUrl] = useState("");
+  // États Import Spotify/Deezer
+  const [importUrl, setImportUrl] = useState("");
+  const [importPlatform, setImportPlatform] = useState<'spotify' | 'deezer'>('spotify');
   const [isImporting, setIsImporting] = useState(false);
 
   // États Recherche Manuelle
@@ -58,24 +59,37 @@ export default function CreateListPage() {
     checkUser();
   }, [router]);
 
-  // --- IMPORT SPOTIFY ---
-  const handleSpotifyImport = async () => {
-    if (!spotifyUrl.trim()) {
-      return alert("Veuillez entrer un lien Spotify.");
+  // --- IMPORT SPOTIFY/DEEZER ---
+  const handleImport = async () => {
+    if (!importUrl.trim()) {
+      return alert("Veuillez entrer un lien de playlist.");
     }
 
-    if (!spotifyUrl.includes('open.spotify.com/playlist')) {
-      return alert("Lien invalide. Utilisez un lien de playlist Spotify publique.");
+    // Déterminer la plateforme automatiquement si possible
+    let platform = importPlatform;
+    if (importUrl.includes('spotify.com')) {
+      platform = 'spotify';
+    } else if (importUrl.includes('deezer.com')) {
+      platform = 'deezer';
+    }
+
+    // Vérifier le format de l'URL
+    if (platform === 'spotify' && !importUrl.includes('open.spotify.com/playlist')) {
+      return alert("Lien Spotify invalide. Utilisez un lien de playlist Spotify publique.");
+    }
+    if (platform === 'deezer' && !importUrl.includes('deezer.com') && !importUrl.includes('/playlist/')) {
+      return alert("Lien Deezer invalide. Utilisez un lien de playlist Deezer publique.");
     }
 
     setIsImporting(true);
     try {
-      const res = await fetch('/api/spotify', {
+      const endpoint = platform === 'spotify' ? '/api/spotify' : '/api/deezer';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url: spotifyUrl.trim() }),
+        body: JSON.stringify({ url: importUrl.trim() }),
       });
 
       if (!res.ok) {
@@ -109,14 +123,16 @@ export default function CreateListPage() {
                 year: item.year
               }));
             setSelectedItems(prev => [...prev, ...formattedItems]);
-          alert(`${newItems.length} titre(s) importé(s) avec succès ! (${data.imported}/${data.totalSpotify})`);
-          setSpotifyUrl("");
+          const platformName = platform === 'spotify' ? 'Spotify' : 'Deezer';
+          const totalKey = platform === 'spotify' ? 'totalSpotify' : 'totalDeezer';
+          alert(`${newItems.length} titre(s) importé(s) avec succès depuis ${platformName} ! (${data.imported}/${data[totalKey]})`);
+          setImportUrl("");
         }
       } else {
         alert("Réponse inattendue du serveur.");
       }
     } catch (error) {
-      console.error('Erreur lors de l\'import Spotify:', error);
+      console.error(`Erreur lors de l'import ${platform}:`, error);
       alert(`Erreur lors de l'import: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
       setIsImporting(false);
@@ -215,28 +231,62 @@ export default function CreateListPage() {
           <h1 className="text-2xl md:text-3xl font-black tracking-tight text-center sm:text-left">Nouvelle Liste</h1>
           <button onClick={() => router.back()} className="text-gray-400 hover:text-white text-sm md:text-base transition-colors">Annuler</button>
         </div>
-        {/* --- Import Spotify --- */}
+        {/* --- Import Spotify/Deezer --- */}
         <div className="bg-white/10 backdrop-blur-xl p-4 md:p-6 rounded-2xl border border-white/15 shadow-lg mb-4 md:mb-8">
-          <h2 className="text-xs md:text-sm font-bold text-[#1DB954] uppercase tracking-widest mb-3 flex items-center gap-2">
-            <span className="text-lg">🟢</span> Importer depuis Spotify
+          <h2 className="text-xs md:text-sm font-bold text-white uppercase tracking-widest mb-3 flex items-center gap-2">
+            🎵 Importer une Playlist
           </h2>
+          
+          {/* Sélecteur de plateforme */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setImportPlatform('spotify')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold uppercase transition-all duration-300 ${
+                importPlatform === 'spotify'
+                  ? 'bg-[#1DB954] text-black shadow-lg shadow-[#1DB954]/20'
+                  : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              <span className="text-base">🟢</span> Spotify
+            </button>
+            <button
+              onClick={() => setImportPlatform('deezer')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold uppercase transition-all duration-300 ${
+                importPlatform === 'deezer'
+                  ? 'bg-gradient-to-r from-[#a400a4] to-[#8d01f1] text-white shadow-lg'
+                  : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              <span className="text-base">🎧</span> Deezer
+            </button>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-2">
             <input 
               type="text"
-              placeholder="Collez le lien de la playlist ici..."
-              className="flex-1 bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-3 text-white focus:border-[#1DB954] outline-none text-sm transition"
-              value={spotifyUrl}
-              onChange={(e) => setSpotifyUrl(e.target.value)}
+              placeholder={`Collez le lien de la playlist ${importPlatform === 'spotify' ? 'Spotify' : 'Deezer'} ici...`}
+              className="flex-1 bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-3 text-white focus:border-[#00e054] outline-none text-sm transition"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
             />
             <button 
-              onClick={handleSpotifyImport}
+              onClick={handleImport}
               disabled={isImporting}
-              className="bg-[#1DB954] text-black font-bold px-4 py-2 rounded-xl md:px-6 hover:bg-[#1ed760] transition disabled:opacity-50 text-sm shadow-xl shadow-[#1DB954]/20 whitespace-nowrap"
+              className={`font-bold px-4 py-2 rounded-xl md:px-6 transition disabled:opacity-50 text-sm shadow-xl whitespace-nowrap ${
+                importPlatform === 'spotify'
+                  ? 'bg-[#1DB954] text-black hover:bg-[#1ed760] shadow-[#1DB954]/20'
+                  : 'bg-gradient-to-r from-[#8b0068] to-[#81009b] text-white hover:opacity-90'
+              }`}
             >
               {isImporting ? 'Import...' : 'Importer'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">Collez un lien public. Nous trouverons les correspondances sur MusicBoxd.</p>
+          <p className="text-xs text-gray-400 mt-2">
+            {importPlatform === 'spotify'
+              ? 'Collez un lien de playlist Spotify publique. Nous trouverons les correspondances sur MusicBoxd.'
+              : 'Collez un lien de playlist Deezer publique. Nous trouverons les correspondances sur MusicBoxd.'
+            }
+          </p>
         </div>
         {/* --- Formulaire classique --- */}
         <div className="bg-white/10 backdrop-blur-xl p-4 md:p-6 rounded-2xl border border-white/15 shadow-lg mb-4 md:mb-8 space-y-4">

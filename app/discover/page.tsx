@@ -71,45 +71,47 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
   useEffect(() => {
     const fetchSocialData = async () => {
       try {
-        // Pour les découvertes système, chercher une review existante de l'utilisateur
-        let reviewId = review.id;
-        
-        if (review.user_id === 'system' && currentUser) {
-          const { data: existingReview } = await supabase
-            .from('reviews')
-            .select('id')
-            .eq('album_id', review.album_id)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-          
-          if (existingReview) {
-            reviewId = existingReview.id;
-          } else {
-            // Pas de review, donc pas de likes/commentaires
-            setLikesCount(0);
-            setHasLiked(false);
-            return;
+        // Pour les découvertes système, vérifier les album_likes
+        if (review.user_id === 'system') {
+          // Compter les likes d'album pour cet album
+          const { count: albumLikesCount } = await supabase
+            .from('album_likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('album_id', review.album_id);
+
+          setLikesCount(albumLikesCount || 0);
+
+          // Vérifier si l'utilisateur actuel a liké cet album
+          if (currentUser) {
+            const { data: userAlbumLike } = await supabase
+              .from('album_likes')
+              .select('id')
+              .eq('album_id', review.album_id)
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+
+            setHasLiked(!!userAlbumLike);
           }
-        }
-
-        // Charger le nombre de likes
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('review_id', reviewId);
-
-        setLikesCount(likesCount || 0);
-
-        // Vérifier si l'utilisateur actuel a liké (si connecté)
-        if (currentUser) {
-          const { data: userLike } = await supabase
+        } else {
+          // Pour les vraies reviews, utiliser la table likes
+          const { count: likesCount } = await supabase
             .from('likes')
-            .select('id')
-            .eq('review_id', reviewId)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
+            .select('*', { count: 'exact', head: true })
+            .eq('review_id', review.id);
 
-          setHasLiked(!!userLike);
+          setLikesCount(likesCount || 0);
+
+          // Vérifier si l'utilisateur actuel a liké
+          if (currentUser) {
+            const { data: userLike } = await supabase
+              .from('likes')
+              .select('id')
+              .eq('review_id', review.id)
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+
+            setHasLiked(!!userLike);
+          }
         }
       } catch (error) {
         console.error('Erreur lors du chargement des données sociales:', error);
@@ -205,7 +207,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
 
   const handleLike = async () => {
     if (!currentUser) {
-      alert("Connectez-vous pour aimer une critique !");
+      alert("Connectez-vous pour aimer une musique !");
       return;
     }
 
@@ -217,28 +219,52 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     setLikesCount(prev => hasLiked ? prev - 1 : prev + 1);
 
     try {
-      // S'assurer qu'une review existe
-      const reviewId = await ensureReviewExists();
+      // Pour les découvertes système, utiliser album_likes
+      if (review.user_id === 'system') {
+        if (previousHasLiked) {
+          // Supprimer le like d'album
+          const { error } = await supabase
+            .from('album_likes')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('album_id', review.album_id);
 
-      if (previousHasLiked) {
-        // Supprimer le like
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('user_id', currentUser.id)
-          .eq('review_id', reviewId);
+          if (error) throw error;
+        } else {
+          // Ajouter le like d'album (sans créer de review)
+          const { error } = await supabase
+            .from('album_likes')
+            .insert({
+              user_id: currentUser.id,
+              album_id: review.album_id,
+              album_name: review.album_name,
+              album_image: review.album_image,
+              artist_name: review.artist_name,
+              item_type: 'album'
+            });
 
-        if (error) throw error;
+          if (error) throw error;
+        }
       } else {
-        // Ajouter le like
-        const { error } = await supabase
-          .from('likes')
-          .insert({
-            user_id: currentUser.id,
-            review_id: reviewId
-          });
+        // Pour les vraies reviews, utiliser la table likes
+        if (previousHasLiked) {
+          const { error } = await supabase
+            .from('likes')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('review_id', review.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('likes')
+            .insert({
+              user_id: currentUser.id,
+              review_id: review.id
+            });
+
+          if (error) throw error;
+        }
       }
     } catch (error) {
       // Rollback en cas d'erreur
@@ -503,6 +529,8 @@ export default function DiscoverPage() {
   const [friendReviews, setFriendReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [friendLoading, setFriendLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false); // Pour le scroll infini
+  const [hasMore, setHasMore] = useState(true); // Indicateur de contenu disponible
   const [audioStates, setAudioStates] = useState<AudioState>({});
   const [currentVisibleCard, setCurrentVisibleCard] = useState<string | null>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
@@ -517,8 +545,10 @@ export default function DiscoverPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreObserverRef = useRef<IntersectionObserver | null>(null); // Observer pour le scroll infini
   const isUserScrollingRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isFetchingRef = useRef<boolean>(false); // Éviter les appels multiples
 
   // 0. AUTHENTIFICATION
   useEffect(() => {
@@ -529,30 +559,63 @@ export default function DiscoverPage() {
     getUser();
   }, []);
 
-  // 1. RÉCUPÉRATION DES CRITIQUES ALÉATOIRES (UNIQUEMENT LES SONGS)
+  // 1. RÉCUPÉRATION INITIALE DES CRITIQUES VIA L'API FEED
   const fetchRandomReviews = useCallback(async () => {
+    setLoading(true);
+    try {
+      console.log('🎬 Chargement initial du feed...');
+      
+      const response = await fetch('/api/feed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.id || null,
+          seenIds: [],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.items && data.items.length > 0) {
+        console.log(`✅ ${data.items.length} items initiaux chargés`);
+        setReviews(data.items);
+        setHasMore(data.hasMore);
+      } else {
+        console.log('⚠️ Aucun item initial trouvé, chargement iTunes en fallback...');
+        // Fallback sur iTunes si l'API Feed ne retourne rien
+        await fetchItunesDiscovery();
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement initial:', error);
+      // Fallback sur iTunes en cas d'erreur
+      await fetchItunesDiscovery();
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fallback : Découverte iTunes (ancienne méthode)
+  const fetchItunesDiscovery = async () => {
     const DISCOVERY_GENRES = [
       "pop", "rock", "hip hop", "jazz", "classical", "electronic",
       "r&b", "indie", "alternative", "metal", "rap", "folk", "soul"
     ];
 
-    setLoading(true);
     try {
-      // Choisir un genre aléatoire
       const randomGenre = DISCOVERY_GENRES[Math.floor(Math.random() * DISCOVERY_GENRES.length)];
-      console.log(`⚡ Découverte mode: Genre "${randomGenre}"`);
+      console.log(`⚡ iTunes Discovery: Genre "${randomGenre}"`);
 
-      // Appel API iTunes
       const response = await fetch(`https://itunes.apple.com/search?term=${randomGenre}&entity=song&limit=50&attribute=genreIndex`);
       const data = await response.json();
 
       if (data.results && data.results.length > 0) {
-        // Transformer les résultats iTunes en format "Review" compatible avec l'affichage
         const discoveryTracks = data.results.map((track: ItunesTrack) => ({
           id: track.trackId,
           user_id: 'system',
           album_id: track.collectionId,
-          album_name: track.trackName, // Afficher le titre de la musique
+          album_name: track.trackName,
           album_image: track.artworkUrl100?.replace('100x100', '600x600') || '',
           artist_name: track.artistName,
           rating: 0,
@@ -565,16 +628,14 @@ export default function DiscoverPage() {
           preview_url_cache: track.previewUrl
         }));
 
-        // Mélanger et garder 20 titres
         const shuffled = discoveryTracks.sort(() => 0.5 - Math.random());
         setReviews(shuffled.slice(0, 20));
+        setHasMore(false); // Pas de scroll infini pour iTunes
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des découvertes:', error);
-    } finally {
-      setLoading(false);
+      console.error('Erreur lors de la récupération iTunes:', error);
     }
-  }, []);
+  };
 
   // 1B. RÉCUPÉRATION DES CRITIQUES DES AMIS (TOUTES LES PUBLICATIONS, PLUS RÉCENTES D'ABORD)
   const fetchFriendReviews = useCallback(async () => {
@@ -617,6 +678,51 @@ export default function DiscoverPage() {
       setFriendLoading(false);
     }
   }, [user]);
+
+  // 1C. FONCTION DE CHARGEMENT INTELLIGENT VIA L'API FEED
+  const loadMoreReviews = useCallback(async () => {
+    if (isFetchingRef.current || !hasMore || loadingMore) {
+      console.log('⏭️ Chargement ignoré (déjà en cours ou plus de contenu)');
+      return;
+    }
+
+    isFetchingRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      console.log('📥 Chargement de nouveaux items...');
+      
+      // Récupérer les IDs déjà vus
+      const seenIds = reviews.map(r => r.id);
+
+      const response = await fetch('/api/feed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.id || null,
+          seenIds: seenIds,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.items && data.items.length > 0) {
+        console.log(`✅ ${data.items.length} nouveaux items chargés`);
+        setReviews(prev => [...prev, ...data.items]);
+        setHasMore(data.hasMore);
+      } else {
+        console.log('⚠️ Pas de nouveaux items disponibles');
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du chargement:', error);
+    } finally {
+      setLoadingMore(false);
+      isFetchingRef.current = false;
+    }
+  }, [reviews, user, hasMore, loadingMore]);
 
   // 2. RÉCUPÉRATION DU PREVIEW AUDIO
   const fetchAudioPreview = useCallback(async (albumId: string, albumName?: string, artistName?: string) => {
@@ -1006,6 +1112,48 @@ export default function DiscoverPage() {
     }
   }, [isAudioEnabled, currentVisibleCard, reviews, friendReviews, activeTab, playAudio, pauseAudio]);
 
+  // 6B. INTERSECTION OBSERVER POUR LE SCROLL INFINI
+  useEffect(() => {
+    if (activeTab !== 'discover' || !hasMore) return;
+
+    const setupLoadMoreObserver = () => {
+      if (loadMoreObserverRef.current) {
+        loadMoreObserverRef.current.disconnect();
+      }
+
+      const loadMoreTrigger = document.getElementById('load-more-trigger');
+      if (!loadMoreTrigger) return;
+
+      loadMoreObserverRef.current = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && !loadingMore && hasMore) {
+              console.log('🎯 Trigger de chargement atteint');
+              loadMoreReviews();
+            }
+          });
+        },
+        {
+          root: containerRef.current,
+          threshold: 0.5,
+          rootMargin: '200px', // Charger avant d'atteindre le bas
+        }
+      );
+
+      loadMoreObserverRef.current.observe(loadMoreTrigger);
+    };
+
+    // Délai pour s'assurer que le DOM est prêt
+    const timeout = setTimeout(setupLoadMoreObserver, 500);
+
+    return () => {
+      clearTimeout(timeout);
+      if (loadMoreObserverRef.current) {
+        loadMoreObserverRef.current.disconnect();
+      }
+    };
+  }, [activeTab, loadingMore, hasMore, loadMoreReviews]);
+
   // 7. CLEANUP
   useEffect(() => {
     return () => {
@@ -1113,16 +1261,55 @@ export default function DiscoverPage() {
         className="h-screen overflow-y-auto snap-y snap-mandatory pt-32 md:pt-36"
       >
         {currentReviews.length > 0 ? (
-          currentReviews.map((review) => (
-            <DiscoverCard
-              key={`${activeTab}-${review.id}`}
-              review={review}
-              isActive={currentVisibleCard === review.album_id}
-              audioState={audioStates[review.album_id]}
-              isAudioEnabled={isAudioEnabled}
-              currentUser={user || null}
-            />
-          ))
+          <>
+            {currentReviews.map((review) => (
+              <DiscoverCard
+                key={`${activeTab}-${review.id}`}
+                review={review}
+                isActive={currentVisibleCard === review.album_id}
+                audioState={audioStates[review.album_id]}
+                isAudioEnabled={isAudioEnabled}
+                currentUser={user || null}
+              />
+            ))}
+            
+            {/* Élément trigger pour le scroll infini (seulement pour l'onglet Découvrir) */}
+            {activeTab === 'discover' && hasMore && (
+              <div
+                id="load-more-trigger"
+                className="h-screen snap-start flex items-center justify-center"
+              >
+                <div className="text-white text-center">
+                  {loadingMore ? (
+                    <>
+                      <div className="w-16 h-16 border-4 border-[#00e054] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-lg font-bold">Chargement...</p>
+                      <p className="text-sm text-gray-400 mt-2">Nouvelles découvertes en cours</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-6xl mb-4">🎵</div>
+                      <p className="text-lg font-bold">Continuez à scroller</p>
+                      <p className="text-sm text-gray-400 mt-2">Plus de contenu arrive</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Message de fin si plus de contenu */}
+            {activeTab === 'discover' && !hasMore && !loadingMore && (
+              <div className="h-screen snap-start flex items-center justify-center">
+                <div className="text-center text-white">
+                  <div className="text-6xl mb-4">🎉</div>
+                  <div className="text-xl font-bold mb-2">Vous avez tout vu !</div>
+                  <div className="text-gray-400">
+                    Revenez plus tard pour de nouvelles découvertes
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="h-screen flex items-center justify-center">
             <div className="text-center text-white">
