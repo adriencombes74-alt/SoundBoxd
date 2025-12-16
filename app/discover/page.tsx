@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
+import Vinyl from '@/components/Vinyl';
 
 interface Review {
   id: number;
@@ -377,25 +378,17 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
       {/* CONTENU PRINCIPAL */}
       <div className="relative z-10 flex items-center justify-center w-full h-full px-6">
 
-        {/* CENTRAGE : POCHETTE QUI TOURNE */}
+        {/* CENTRAGE : DISQUE VINYLE QUI TOURNE */}
         <div className="flex flex-col items-center justify-center space-y-8">
           <div className="relative">
-            <img
-              src={review.album_image}
-              alt={`Pochette de l'album ${review.album_name}`}
-              className={`w-80 h-80 object-cover rounded-2xl shadow-2xl border-4 border-white/20 ${
-                isActive ? 'animate-spin' : ''
-              }`}
-              style={{
-                animationDuration: '20s',
-                animationTimingFunction: 'linear',
-                animationIterationCount: 'infinite'
-              }}
-            />
+            {/* Composant Vinyl - tourne uniquement quand actif */}
+            <div className={isActive ? 'animate-[spin_4s_linear_infinite]' : ''}>
+              <Vinyl imageUrl={review.album_image} size="w-72 h-72 md:w-80 md:h-80" />
+            </div>
 
             {/* INDICATEUR DE LECTURE AUDIO */}
             {isActive && (
-              <div className="absolute top-4 right-4 flex items-center gap-2">
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
                 {isAudioEnabled && (
                   <div className={`w-3 h-3 rounded-full ${
                     audioState?.isPlaying ? 'bg-[#00e054] animate-pulse' :
@@ -533,15 +526,14 @@ export default function DiscoverPage() {
   const [hasMore, setHasMore] = useState(true); // Indicateur de contenu disponible
   const [audioStates, setAudioStates] = useState<AudioState>({});
   const [currentVisibleCard, setCurrentVisibleCard] = useState<string | null>(null);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true); // Activé par défaut pour une expérience type Reels
   const [activeTab, setActiveTab] = useState<'discover' | 'friends'>('discover');
   const [user, setUser] = useState<{
     id: string;
     email?: string;
   } | null>(null);
-  const lastCardChangeRef = useRef<number>(0);
-  const lastAudioStartRef = useRef<number>(0);
   const previewCacheRef = useRef<Map<string, string | null>>(new Map());
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -578,12 +570,16 @@ export default function DiscoverPage() {
 
       const data = await response.json();
 
+      console.log('📦 Réponse API Feed:', data);
+      
       if (data.success && data.items && data.items.length > 0) {
         console.log(`✅ ${data.items.length} items initiaux chargés`);
+        console.log('🎵 Premier item:', data.items[0]);
         setReviews(data.items);
         setHasMore(data.hasMore);
       } else {
         console.log('⚠️ Aucun item initial trouvé, chargement iTunes en fallback...');
+        console.log('📊 Data reçue:', JSON.stringify(data));
         // Fallback sur iTunes si l'API Feed ne retourne rien
         await fetchItunesDiscovery();
       }
@@ -614,7 +610,7 @@ export default function DiscoverPage() {
         const discoveryTracks = data.results.map((track: ItunesTrack) => ({
           id: track.trackId,
           user_id: 'system',
-          album_id: track.collectionId,
+          album_id: String(track.collectionId), // Convertir en string pour cohérence
           album_name: track.trackName,
           album_image: track.artworkUrl100?.replace('100x100', '600x600') || '',
           artist_name: track.artistName,
@@ -629,7 +625,10 @@ export default function DiscoverPage() {
         }));
 
         const shuffled = discoveryTracks.sort(() => 0.5 - Math.random());
-        setReviews(shuffled.slice(0, 20));
+        const selected = shuffled.slice(0, 20);
+        console.log(`🎵 ${selected.length} tracks iTunes chargés`);
+        console.log('🎧 Premier track:', selected[0]);
+        setReviews(selected);
         setHasMore(false); // Pas de scroll infini pour iTunes
       }
     } catch (error) {
@@ -724,214 +723,111 @@ export default function DiscoverPage() {
     }
   }, [reviews, user, hasMore, loadingMore]);
 
-  // 2. RÉCUPÉRATION DU PREVIEW AUDIO
+  // 2. RÉCUPÉRATION DU PREVIEW AUDIO - VERSION SIMPLIFIÉE
   const fetchAudioPreview = useCallback(async (albumId: string, albumName?: string, artistName?: string) => {
-    const cacheKey = `${albumId}-${albumName}-${artistName}`;
+    const cacheKey = `${albumId}`;
 
     try {
-      // Vérifier le cache d'abord
-      if (previewCacheRef.current.has(cacheKey)) {
-        const cached = previewCacheRef.current.get(cacheKey);
-        console.log(`💾 Cache hit pour "${albumName}": ${cached ? 'trouvé' : 'null'}`);
-        return cached || null;
+      // Vérifier le cache d'abord (mais ne pas bloquer sur null)
+      const cached = previewCacheRef.current.get(cacheKey);
+      if (cached) {
+        console.log(`💾 Cache hit: ${albumName}`);
+        return cached;
       }
 
-      console.log(`🎵 Recherche preview pour "${albumName}" de ${artistName} (ID: ${albumId})`);
+      console.log(`🎵 Recherche preview: "${albumName}" - ${artistName}`);
 
-      let tracks;
+      // STRATÉGIE SIMPLE : Une seule recherche directe
+      const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, ' ').trim().substring(0, 60);
+      const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=5`);
+      const data = await response.json();
 
-      // Pour les amis : essayer d'abord une recherche directe par titre + artiste
-      if (albumName && artistName) {
-        try {
-          console.log(`🔍 Recherche directe: "${albumName}" par ${artistName}`);
-          const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, '').substring(0, 50);
-          const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=10`);
-          const data = await response.json();
-
-          if (data.results && data.results.length > 0) {
-            // Prendre le premier résultat qui correspond
-            const bestMatch = data.results[0];
-            if (bestMatch.previewUrl) {
-              console.log(`✅ Trouvé directement: "${bestMatch.trackName}"`);
-              previewCacheRef.current.set(cacheKey, bestMatch.previewUrl);
-              return bestMatch.previewUrl;
-            }
-          }
-        } catch (error) {
-          console.log('⚠️ Échec recherche directe:', error);
-        }
-
-        // Si la recherche titre + artiste échoue, essayer seulement avec l'artiste
-        try {
-          console.log(`🔍 Recherche par artiste: ${artistName}`);
-          const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&limit=10`);
-          const data = await response.json();
-
-          if (data.results && data.results.length > 0) {
-            // Prendre le premier résultat de cet artiste
-            const artistTrack = data.results[0];
-            if (artistTrack.previewUrl) {
-              console.log(`✅ Trouvé par artiste: "${artistTrack.trackName}"`);
-              previewCacheRef.current.set(cacheKey, artistTrack.previewUrl);
-              return artistTrack.previewUrl;
-            }
-          }
-        } catch (error) {
-          console.log('⚠️ Échec recherche par artiste:', error);
+      if (data.results && data.results.length > 0) {
+        // Prendre le premier résultat avec preview
+        const trackWithPreview = data.results.find((t: any) => t.previewUrl);
+        if (trackWithPreview?.previewUrl) {
+          console.log(`✅ Preview trouvé: "${trackWithPreview.trackName}"`);
+          previewCacheRef.current.set(cacheKey, trackWithPreview.previewUrl);
+          return trackWithPreview.previewUrl;
         }
       }
 
-      // Essayer avec l'ID iTunes (pour les découvertes qui ont des vrais IDs)
-      try {
-        console.log(`🔍 Recherche par ID: ${albumId}`);
-        const response = await fetch(`https://itunes.apple.com/lookup?id=${albumId}&entity=song&limit=20`);
-        const data = await response.json();
-
-        if (data.results && data.results.length > 1) {
-          tracks = data.results.slice(1);
-          console.log(`📀 Trouvé ${tracks.length} pistes par ID`);
-        }
-      } catch (error) {
-        console.log('⚠️ Échec avec ID iTunes:', error);
-      }
-
-      // Si ça n'a pas marché, essayer par recherche album
-      if (!tracks && albumName && artistName) {
-        try {
-          console.log(`🔍 Recherche album: "${albumName}"`);
-          const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, '').substring(0, 50);
-          const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=album&limit=5`);
-          const searchData = await response.json();
-
-          if (searchData.results && searchData.results.length > 0) {
-            const foundAlbum = searchData.results[0];
-            console.log(`💿 Album trouvé: "${foundAlbum.collectionName}"`);
-            const trackResponse = await fetch(`https://itunes.apple.com/lookup?id=${foundAlbum.collectionId}&entity=song&limit=20`);
-            const trackData = await trackResponse.json();
-
-            if (trackData.results && trackData.results.length > 1) {
-              tracks = trackData.results.slice(1);
-              console.log(`🎵 ${tracks.length} pistes trouvées dans l'album`);
-            }
-          }
-        } catch (error) {
-          console.log('⚠️ Échec recherche album:', error);
-        }
-      }
-
-      if (tracks && tracks.length > 0) {
-        const validTracks = tracks.filter((track: { previewUrl?: string }) => track.previewUrl && track.previewUrl.trim() !== '');
-
-        if (validTracks.length > 0) {
-          const selectedTrack = validTracks[0];
-          console.log(`✅ Trouvé: "${selectedTrack.trackName}"`);
-          previewCacheRef.current.set(cacheKey, selectedTrack.previewUrl);
-          return selectedTrack.previewUrl;
-        }
-      }
-
-      console.log('❌ Aucun preview trouvé');
-      previewCacheRef.current.set(cacheKey, null);
+      console.log('❌ Aucun preview disponible');
       return null;
     } catch (error) {
       console.error('❌ Erreur preview:', error);
-      previewCacheRef.current.set(cacheKey, null);
       return null;
     }
   }, []);
 
-  // 3. GESTION AUDIO
-  const playAudio = useCallback(async (albumId: string, albumName?: string, artistName?: string) => {
-    console.log(`🎵 Lecture demandée pour "${albumName}"`);
-
-    const currentState = audioStates[albumId];
-
-    // Si déjà en cours de lecture ou de chargement, ne rien faire
-    if (currentState?.isPlaying || currentState?.isLoading) {
-      console.log('⏸️ Déjà actif');
+  // 3. GESTION AUDIO - VERSION SIMPLIFIÉE ET ROBUSTE
+  const playAudio = useCallback(async (albumId: string, albumName?: string, artistName?: string, cachedPreviewUrl?: string) => {
+    if (!isAudioEnabled) {
+      console.log('🔇 Audio désactivé');
       return;
     }
 
-    // Protection contre les appels multiples trop rapprochés
-    const now = Date.now();
-    if (currentState?.lastPlayAttempt && (now - currentState.lastPlayAttempt) < 1000) {
-      console.log('⏳ Trop récent');
-      return;
-    }
-
-    // Marquer comme en chargement
-    setAudioStates(prev => ({
-      ...prev,
-      [albumId]: {
-        ...prev[albumId],
-        isLoading: true,
-        lastPlayAttempt: now
-      }
-    }));
+    console.log(`🎵 Lecture: "${albumName}" - ${artistName}`);
 
     try {
-      // Arrêter tous les autres audios d'abord
-      await Promise.all(
-        Object.entries(audioStates).map(async ([id, state]) => {
-          if (id !== albumId && state.audio && state.isPlaying) {
-            console.log('🛑 Arrêt de l\'audio:', id);
-            state.audio.pause();
-            state.audio.currentTime = 0;
-            setAudioStates(prev => ({
-              ...prev,
-              [id]: { ...state, isPlaying: false }
-            }));
-          }
-        })
-      );
-
-      let audio: HTMLAudioElement;
-      let previewUrl: string | null = null;
-
-      // Si pas de preview, essayer de le récupérer
-      if (!currentState?.previewUrl) {
-        previewUrl = await fetchAudioPreview(albumId, albumName, artistName);
-        if (!previewUrl) {
-          console.log('❌ Aucun preview');
-          setAudioStates(prev => ({
-            ...prev,
-            [albumId]: { ...prev[albumId], isLoading: false }
-          }));
-          return;
-        }
-        audio = new Audio(previewUrl);
-      } else {
-        audio = currentState.audio!;
-        previewUrl = currentState.previewUrl;
+      // Arrêter l'audio précédent immédiatement
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+        currentAudioRef.current = null;
       }
 
-      // Configuration audio
-      audio.volume = 0.8;
-      audio.loop = false;
+      // Marquer comme en chargement
+      setAudioStates(prev => ({
+        ...prev,
+        [albumId]: { audio: null, isPlaying: false, previewUrl: null, isLoading: true, lastPlayAttempt: Date.now() }
+      }));
 
-      // Événements audio
-      audio.addEventListener('ended', () => {
-        console.log('🏁 Terminé');
+      // Récupérer le preview (utiliser le cache si disponible)
+      let previewUrl = cachedPreviewUrl || null;
+      
+      if (!previewUrl) {
+        previewUrl = await fetchAudioPreview(albumId, albumName, artistName);
+      } else {
+        console.log('💾 Utilisation du preview caché');
+      }
+      
+      if (!previewUrl) {
+        console.log('❌ Pas de preview disponible');
+        setAudioStates(prev => ({
+          ...prev,
+          [albumId]: { ...prev[albumId], isLoading: false }
+        }));
+        return;
+      }
+
+      // Créer et configurer l'audio
+      const audio = new Audio(previewUrl);
+      audio.volume = 0.7;
+      audio.preload = 'auto';
+
+      // Événements
+      audio.onended = () => {
+        console.log('🏁 Fin de lecture');
         setAudioStates(prev => ({
           ...prev,
           [albumId]: { ...prev[albumId], isPlaying: false }
         }));
-      });
+      };
 
-      audio.addEventListener('error', (e) => {
-        console.error('❌ Erreur audio:', e);
+      audio.onerror = (e) => {
+        console.error('❌ Erreur lecture audio:', e);
         setAudioStates(prev => ({
           ...prev,
           [albumId]: { ...prev[albumId], isPlaying: false, isLoading: false }
         }));
-      });
+      };
 
-      // Jouer l'audio
+      // Lancer la lecture
       await audio.play();
-      console.log('✅ Lecture démarrée');
-      lastAudioStartRef.current = Date.now();
+      console.log('✅ Lecture démarrée avec succès');
 
-      // Mettre à jour l'état
+      currentAudioRef.current = audio;
       setAudioStates(prev => ({
         ...prev,
         [albumId]: {
@@ -939,44 +835,29 @@ export default function DiscoverPage() {
           isPlaying: true,
           previewUrl,
           isLoading: false,
-          lastPlayAttempt: now
+          lastPlayAttempt: Date.now()
         }
       }));
 
     } catch (error) {
-      console.error('❌ Erreur de lecture audio:', error);
+      console.error('❌ Erreur playAudio:', error);
       setAudioStates(prev => ({
         ...prev,
         [albumId]: { ...prev[albumId], isPlaying: false, isLoading: false }
       }));
     }
-  }, [audioStates, fetchAudioPreview]);
+  }, [fetchAudioPreview, isAudioEnabled]);
 
-  const pauseAudio = useCallback((albumId: string) => {
-    const state = audioStates[albumId];
-    if (state?.audio && state.isPlaying) {
-      // Protection : ne pas arrêter un audio qui vient de commencer (minimum 2 secondes)
-      const now = Date.now();
-      if (now - lastAudioStartRef.current < 2000) {
-        console.log('⏳ Audio trop récent, pas d\'arrêt');
-        return;
-      }
-
-      try {
-        console.log('🛑 Arrêt de l\'audio:', albumId);
-        state.audio.pause();
-        state.audio.currentTime = 0;
-        setAudioStates(prev => ({
-          ...prev,
-          [albumId]: { ...state, isPlaying: false }
-        }));
-      } catch (error) {
-        console.error('Erreur lors de la pause audio:', error);
-      }
+  const pauseAudio = useCallback(() => {
+    if (currentAudioRef.current) {
+      console.log('🛑 Stop audio');
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
     }
-  }, [audioStates]);
+  }, []);
 
-  // 4. INTERSECTION OBSERVER SIMPLIFIÉ
+  // 4. INTERSECTION OBSERVER - VERSION SIMPLIFIÉE SANS BOUCLE
   const setupIntersectionObserver = useCallback(() => {
     if (observerRef.current) {
       observerRef.current.disconnect();
@@ -984,61 +865,50 @@ export default function DiscoverPage() {
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        // Trouver la carte la plus visible (celle avec le ratio d'intersection le plus élevé)
+        // Trouver la carte la plus visible
         let maxRatio = 0;
         let mostVisibleCard: string | null = null;
 
         entries.forEach((entry) => {
           const albumId = entry.target.getAttribute('data-album-id');
-          if (!albumId) return;
+          if (!albumId) {
+            console.log('⚠️ Carte sans album_id détectée');
+            return;
+          }
 
           if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
             maxRatio = entry.intersectionRatio;
             mostVisibleCard = albumId;
+            console.log(`👁️ Carte visible: ${albumId} (ratio: ${entry.intersectionRatio.toFixed(2)})`);
           }
         });
 
-        // Changer si une carte devient suffisamment visible et différente de l'actuelle
-        if (mostVisibleCard && mostVisibleCard !== currentVisibleCard && maxRatio > 0.8) {
-          const now = Date.now();
-          // Éviter les changements trop fréquents (minimum 1500ms entre les changements)
-          // Et éviter d'interrompre un audio qui vient de commencer (minimum 2000ms depuis le dernier démarrage)
-          if (now - lastCardChangeRef.current > 1500 && now - lastAudioStartRef.current > 2000) {
-            console.log(`🎯 Nouvelle carte active: ${mostVisibleCard} (ratio: ${maxRatio})`);
-
-            // Arrêter l'ancienne carte
-            if (currentVisibleCard) {
-              pauseAudio(currentVisibleCard);
+        // Changer de carte si suffisamment visible (>50%)
+        if (mostVisibleCard && maxRatio > 0.5) {
+          setCurrentVisibleCard(prev => {
+            // Ne rien faire si c'est déjà la carte active
+            if (prev === mostVisibleCard) {
+              console.log(`✓ Carte déjà active: ${mostVisibleCard}`);
+              return prev;
             }
-
-            setCurrentVisibleCard(mostVisibleCard);
-            lastCardChangeRef.current = now;
-
-            // Activer l'audio seulement si c'est activé
-            if (isAudioEnabled && mostVisibleCard) {
-              const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
-              const review = currentReviews.find(r => r.album_id === mostVisibleCard);
-              setTimeout(() => {
-                playAudio(mostVisibleCard!, review?.album_name, review?.artist_name);
-              }, 300);
-            }
-          }
+            
+            console.log(`🎯 Changement de carte: ${prev} → ${mostVisibleCard}`);
+            return mostVisibleCard;
+          });
         }
       },
       {
         root: containerRef.current,
-        threshold: 0.8, // Seuil unique plus élevé pour éviter les oscillations
-        rootMargin: '0px 0px 0px 0px' // Pas de marges pour une détection plus précise
+        threshold: [0, 0.25, 0.5, 0.75, 1.0],
+        rootMargin: '0px'
       }
     );
 
     // Observer toutes les cartes
     const cards = containerRef.current?.querySelectorAll('[data-album-id]');
-    console.log(`🎪 Observation de ${cards?.length || 0} cartes`);
-    cards?.forEach(card => {
-      observerRef.current?.observe(card);
-    });
-  }, [playAudio, pauseAudio, currentVisibleCard, reviews, friendReviews, isAudioEnabled, activeTab]);
+    console.log(`🎪 Observer ${cards?.length || 0} cartes`);
+    cards?.forEach(card => observerRef.current?.observe(card));
+  }, []); // Pas de dépendances pour éviter la boucle
 
 
   // 6. EFFETS
@@ -1075,42 +945,84 @@ export default function DiscoverPage() {
   }, []);
 
   // Charger les critiques des amis quand on change vers l'onglet amis
+  const prevTabRef = useRef<'discover' | 'friends'>('discover');
+  
   useEffect(() => {
+    // Charger les reviews des amis si nécessaire
     if (activeTab === 'friends' && user && friendReviews.length === 0) {
       fetchFriendReviews();
     }
 
-    // Arrêter l'audio quand on change d'onglet
-    if (currentVisibleCard) {
-      pauseAudio(currentVisibleCard);
+    // Arrêter l'audio et réinitialiser la carte SEULEMENT si l'onglet a changé
+    if (prevTabRef.current !== activeTab) {
+      console.log(`🔄 Changement d'onglet: ${prevTabRef.current} → ${activeTab}`);
+      pauseAudio();
       setCurrentVisibleCard(null);
+      prevTabRef.current = activeTab;
     }
-  }, [activeTab, user, friendReviews.length, fetchFriendReviews, currentVisibleCard, pauseAudio]);
+  }, [activeTab, user, friendReviews.length, fetchFriendReviews, pauseAudio]);
 
+  // Setup observer une seule fois quand les reviews sont chargées
   useEffect(() => {
     const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
     const currentLoading = activeTab === 'discover' ? loading : friendLoading;
 
     if (currentReviews.length > 0 && !currentLoading) {
-      // Délai plus long pour éviter les problèmes au montage
-      setTimeout(setupIntersectionObserver, 500);
+      console.log(`📊 Setup observer pour ${currentReviews.length} reviews`);
+      // Délai pour s'assurer que le DOM est prêt
+      const timer = setTimeout(() => {
+        setupIntersectionObserver();
+        console.log('✅ Observer configuré');
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [reviews, friendReviews, loading, friendLoading, activeTab, setupIntersectionObserver]);
+  }, [reviews.length, friendReviews.length, loading, friendLoading, activeTab]); // Retiré setupIntersectionObserver
 
-  // Gérer l'activation/désactivation de l'audio automatique
+  // Gérer le changement de carte visible et la lecture audio
   useEffect(() => {
-    if (isAudioEnabled && currentVisibleCard) {
-      console.log('🔄 Audio activé pour la carte actuelle:', currentVisibleCard);
-      const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
-      const review = currentReviews.find(r => r.album_id === currentVisibleCard);
-      setTimeout(() => {
-        playAudio(currentVisibleCard, review?.album_name, review?.artist_name);
-      }, 300);
-    } else if (!isAudioEnabled && currentVisibleCard) {
-      console.log('🛑 Audio désactivé, arrêt de la lecture');
-      pauseAudio(currentVisibleCard);
+    console.log(`🎬 useEffect audio: card=${currentVisibleCard}, enabled=${isAudioEnabled}, tab=${activeTab}`);
+    
+    if (!currentVisibleCard) {
+      console.log('⏭️ Pas de carte visible');
+      return;
     }
-  }, [isAudioEnabled, currentVisibleCard, reviews, friendReviews, activeTab, playAudio, pauseAudio]);
+
+    // Arrêter l'audio précédent
+    pauseAudio();
+
+    // Lancer le nouvel audio si activé
+    if (isAudioEnabled) {
+      const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
+      console.log(`📚 Recherche dans ${currentReviews.length} reviews`);
+      
+      const review = currentReviews.find(r => {
+        const match = String(r.album_id) === String(currentVisibleCard);
+        if (!match && currentReviews.length <= 3) {
+          console.log(`🔍 Comparaison: "${r.album_id}" (${typeof r.album_id}) vs "${currentVisibleCard}" (${typeof currentVisibleCard})`);
+        }
+        return match;
+      });
+      
+      if (review) {
+        console.log(`✅ Review trouvée: "${review.album_name}" - ${review.artist_name}`);
+        console.log('🔄 Lancement de la lecture audio...');
+        
+        // Petit délai pour laisser le scroll se stabiliser
+        const timer = setTimeout(() => {
+          // @ts-ignore - preview_url_cache peut exister sur les reviews iTunes
+          playAudio(currentVisibleCard, review.album_name, review.artist_name, review.preview_url_cache);
+        }, 200);
+        
+        return () => clearTimeout(timer);
+      } else {
+        console.log(`❌ Review non trouvée pour album_id: ${currentVisibleCard}`);
+        console.log('📋 IDs disponibles:', currentReviews.map(r => r.album_id).slice(0, 5));
+      }
+    } else {
+      console.log('🔇 Audio désactivé');
+    }
+  }, [currentVisibleCard, isAudioEnabled, activeTab, reviews, friendReviews, playAudio, pauseAudio]);
 
   // 6B. INTERSECTION OBSERVER POUR LE SCROLL INFINI
   useEffect(() => {
@@ -1157,19 +1069,13 @@ export default function DiscoverPage() {
   // 7. CLEANUP
   useEffect(() => {
     return () => {
-      // Arrêter tous les audios et nettoyer l'observer
-      Object.values(audioStates).forEach(state => {
-        if (state.audio) {
-          state.audio.pause();
-          state.audio.currentTime = 0;
-        }
-      });
-
+      // Arrêter l'audio et nettoyer
+      pauseAudio();
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
     };
-  }, [audioStates]);
+  }, [pauseAudio]);
 
   const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
 

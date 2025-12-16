@@ -17,7 +17,9 @@ interface ReviewItem {
 
 export async function POST(request: Request) {
   try {
+    console.log('🎯 Feed API appelée');
     const { userId, seenIds } = await request.json();
+    console.log(`👤 User: ${userId}, Seen: ${seenIds.length} items`);
     
     // Le tableau des IDs à exclure (ceux déjà vus) pour la syntaxe Supabase
     // Note: .not('id', 'in', `(${seenIds.join(',')})`) est la syntaxe correcte pour une liste brute
@@ -140,19 +142,27 @@ export async function POST(request: Request) {
     // Si vraiment on n'a rien (base vide ou tout filtré), on prend juste les derniers
     limitNeeded = 5 - nextItems.length;
     if (limitNeeded > 0) {
-        const { data: recentReviews } = await supabase
+        console.log('🔄 Fallback: chargement des reviews récentes');
+        const { data: recentReviews, error: recentError } = await supabase
             .from('reviews')
             .select('*, profiles(username, avatar_url)')
             .not('id', 'in', excludeIdsStr)
-            .not('id', 'in', `(${nextItems.map(i => i.id).concat(seenIds).join(',')})`)
             .order('created_at', { ascending: false })
             .limit(limitNeeded);
             
-         if (recentReviews) {
+        if (recentError) {
+            console.error('❌ Erreur fallback recent:', recentError);
+        }
+            
+         if (recentReviews && recentReviews.length > 0) {
+            console.log(`✅ ${recentReviews.length} reviews récentes chargées`);
             nextItems = [...nextItems, ...recentReviews];
+        } else {
+            console.log('⚠️ Aucune review récente trouvée');
         }
     }
 
+    console.log(`📤 Retour API: ${nextItems.length} items`);
     return NextResponse.json({ success: true, items: nextItems });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

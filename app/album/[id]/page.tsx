@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import ProfileMenu from '@/components/ui/profile-menu';
+import ListenMenu from '@/components/ui/listen-menu';
 
 export default function AlbumPage({ params }: { params: any }) {
   const router = useRouter();
@@ -267,27 +269,27 @@ export default function AlbumPage({ params }: { params: any }) {
       </div>
 
       {/* HEADER ALBUM */}
-      <header className="relative w-full h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a]">
-        <img src={highResImage} className="absolute inset-0 w-full h-full object-cover opacity-70 blur-2xl scale-110 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent"></div>
+      <header className="relative w-full min-h-[400px] md:h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a] pt-20 md:pt-0">
+        <img src={highResImage} className="absolute inset-0 w-full h-full object-cover opacity-40 md:opacity-70 blur-2xl scale-110 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-[#050505]/40"></div>
 
-        <div className="relative z-10 max-w-6xl mx-auto w-full px-6 py-12 flex flex-col md:flex-row gap-10 items-end">
-            <div className="relative w-64 h-64 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden bg-black flex-shrink-0 group">
+        <div className="relative z-10 max-w-6xl mx-auto w-full px-4 md:px-6 py-8 md:py-12 flex flex-col md:flex-row gap-6 md:gap-10 items-center md:items-end">
+            <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden bg-black flex-shrink-0 group">
                 <img src={highResImage} className="w-full h-full object-cover" />
                 {albumAvg && (
-                    <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md text-[#00e054] px-3 py-1 rounded-full font-black text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
+                    <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/80 backdrop-blur-md text-[#00e054] px-2 py-1 md:px-3 md:py-1 rounded-full font-black text-lg md:text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
                         <span>★</span> {albumAvg}
                     </div>
                 )}
             </div>
             
-            <div className="flex-1 mb-6">
-                <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1 mb-4 md:mb-6 text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2">
                     <span className="bg-[#00e054] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Album</span>
                     <span className="text-gray-400 text-xs font-bold uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">{album.primaryGenreName}</span>
                 </div>
-                <h1 className="text-5xl md:text-7xl font-black text-white mb-4 leading-none tracking-tight drop-shadow-2xl">{album.collectionName}</h1>
-                <div className="text-gray-300 text-xl font-light flex items-center gap-4">
+                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black text-white mb-3 md:mb-4 leading-tight md:leading-none tracking-tight drop-shadow-2xl">{album.collectionName}</h1>
+                <div className="text-gray-300 text-base md:text-xl font-light flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-4">
                     <Link href={`/artist/${album.artistId}`} className="text-white font-bold hover:text-[#00e054] transition hover:underline decoration-2 underline-offset-4">{album.artistName}</Link>
                     <span className="text-gray-600">•</span>
                     <span>{new Date(album.releaseDate).getFullYear()}</span>
@@ -296,26 +298,23 @@ export default function AlbumPage({ params }: { params: any }) {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-16 relative z-10">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-16 relative z-10">
         
         {/* GAUCHE : ACTIONS */}
-        <div className="lg:col-span-4 space-y-8">
-            <button onClick={() => openRatingModal('album')} className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-4 rounded-2xl transition uppercase tracking-widest text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-3">
-                <span className="text-xl">★</span> Noter l'Album
+        <div className="lg:col-span-4 space-y-6 md:space-y-8">
+            <button onClick={() => openRatingModal('album')} className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-3 md:py-4 rounded-2xl transition uppercase tracking-widest text-xs md:text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-2 md:gap-3">
+                <span className="text-lg md:text-xl">★</span> Noter l'Album
             </button>
 
-            <div className="bg-[#121212] p-6 rounded-3xl border border-white/5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 text-center">Écouter sur</h3>
-                <div className="space-y-3">
-                    {appleMusicUrl && <a href={appleMusicUrl} target="_blank" className="flex items-center justify-center gap-2 w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold transition text-gray-300 hover:text-white">🎵 Apple Music</a>}
-                    <a href={spotifySearchUrl} target="_blank" className="flex items-center justify-center gap-2 w-full py-3 bg-[#1DB954]/10 text-[#1DB954] hover:bg-[#1DB954]/20 rounded-xl text-sm font-bold transition border border-[#1DB954]/20">Spotify</a>
-                    <a href={youtubeSearchUrl} target="_blank" className="flex items-center justify-center gap-2 w-full py-3 bg-[#FF0000]/10 text-[#FF0000] hover:bg-[#FF0000]/20 rounded-xl text-sm font-bold transition border border-[#FF0000]/20">YouTube</a>
-                </div>
-            </div>
+            <ListenMenu 
+              spotifyUrl={spotifySearchUrl}
+              youtubeUrl={youtubeSearchUrl}
+              appleMusicUrl={appleMusicUrl}
+            />
 
             {/* SECTION AVIS */}
-            <div className="bg-[#121212] p-6 rounded-3xl border border-white/5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6 pb-2 border-b border-white/5 flex justify-between">
+            <div className="bg-[#121212] p-4 md:p-6 rounded-3xl border border-white/5">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 md:mb-6 pb-2 border-b border-white/5 flex justify-between">
                     <span>Avis Album</span>
                     <span className="text-white">{reviews.filter((r:any) => !r.track_id).length}</span>
                 </h3>
@@ -352,30 +351,30 @@ export default function AlbumPage({ params }: { params: any }) {
 
         {/* COLONNE DROITE : PISTES */}
         <div className="lg:col-span-8">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-8 border-b border-white/10 pb-4 flex justify-between items-center">
+            <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-8 border-b border-white/10 pb-3 md:pb-4 flex flex-col md:flex-row justify-between md:items-center gap-2">
                 <span>Pistes de l'album</span>
-                <span className="text-[10px] text-[#00e054] bg-[#00e054]/10 px-2 py-1 rounded">Cliquez sur ★ pour noter une piste</span>
+                <span className="text-[9px] md:text-[10px] text-[#00e054] bg-[#00e054]/10 px-2 py-1 rounded">Cliquez sur ★ pour noter</span>
             </h2>
             
-            <div className="space-y-2">
+            <div className="space-y-1 md:space-y-2">
                 {tracks.map((track, index) => {
                     const trackAvg = getAverageRating(track.trackId);
                     return (
-                        <div key={track.trackId} className={`flex items-center p-4 rounded-2xl transition group border ${
+                        <div key={track.trackId} className={`flex items-center gap-2 md:gap-3 p-2 md:p-4 rounded-xl md:rounded-2xl transition group border ${
                             playingTrack === track.trackId.toString()
                                 ? 'bg-[#00e054]/10 border-[#00e054]/30'
                                 : 'hover:bg-white/5 border-transparent hover:border-white/5'
                         }`}>
-                            <span className={`w-8 font-mono text-sm font-bold ${
+                            <span className={`w-6 md:w-8 font-mono text-xs md:text-sm font-bold flex-shrink-0 ${
                                 playingTrack === track.trackId.toString()
                                     ? 'text-[#00e054]'
                                     : 'text-gray-600 group-hover:text-[#00e054]'
                             }`}>{index + 1}</span>
                             
-                            <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex-1 min-w-0">
                                 <button
                                     onClick={() => handlePlayTrack(track)}
-                                    className={`font-bold truncate text-lg text-left hover:cursor-pointer ${
+                                    className={`font-bold truncate text-sm md:text-lg text-left hover:cursor-pointer w-full ${
                                         playingTrack === track.trackId.toString()
                                             ? 'text-[#00e054]'
                                             : 'text-gray-300 group-hover:text-white'
@@ -384,33 +383,64 @@ export default function AlbumPage({ params }: { params: any }) {
                                 >
                                     {track.trackName}
                                     {playingTrack === track.trackId.toString() && (
-                                        <span className="ml-2 text-xs opacity-70">🎵</span>
+                                        <span className="ml-1 md:ml-2 text-xs opacity-70">🎵</span>
                                     )}
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
                                 {trackAvg && (
-                                    <div className="flex items-center gap-1 text-sm font-black text-[#00e054] bg-[#00e054]/10 px-3 py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
-                                        <span className="text-xs opacity-70">★</span> {trackAvg}
+                                    <div className="flex items-center gap-0.5 md:gap-1 text-xs md:text-sm font-black text-[#00e054] bg-[#00e054]/10 px-1.5 md:px-3 py-0.5 md:py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
+                                        <span className="text-[10px] md:text-xs opacity-70">★</span> {trackAvg}
                                     </div>
                                 )}
 
-                                {/* BOUTON PLAY/PAUSE */}
-                                <button
+                                {/* BOUTON PLAY/PAUSE - Design moderne */}
+                                <motion.button
                                     onClick={() => handlePlayTrack(track)}
-                                    className="text-gray-600 hover:text-[#00e054] text-xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100 flex items-center justify-center"
+                                    className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
+                                        playingTrack === track.trackId.toString()
+                                            ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)]'
+                                            : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)]'
+                                    }`}
                                     title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.95 }}
                                 >
                                     {playingTrack === track.trackId.toString() ? (
-                                        <span className="text-[#00e054]">⏸️</span>
+                                        <motion.svg 
+                                            className="w-3.5 h-3.5 md:w-4 md:h-4" 
+                                            fill="currentColor" 
+                                            viewBox="0 0 24 24"
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ type: "spring", stiffness: 400 }}
+                                        >
+                                            <rect x="6" y="4" width="4" height="16" rx="1" />
+                                            <rect x="14" y="4" width="4" height="16" rx="1" />
+                                        </motion.svg>
                                     ) : (
-                                        <span>▶️</span>
+                                        <svg className="w-3.5 h-3.5 md:w-4 md:h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
                                     )}
-                                </button>
+                                </motion.button>
 
-                                <button onClick={() => openRatingModal(track)} className="text-gray-700 hover:text-white text-2xl opacity-0 group-hover:opacity-100 transition transform hover:scale-110 focus:opacity-100" title="Noter ce titre">★</button>
-                                <span className="text-xs text-gray-600 font-mono w-10 text-right">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
+                                {/* BOUTON NOTER - Design moderne */}
+                                <motion.button 
+                                    onClick={() => openRatingModal(track)} 
+                                    className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 text-amber-400 hover:bg-amber-500 hover:text-black flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]" 
+                                    title="Noter ce titre"
+                                    whileHover={{ scale: 1.1, rotate: 15 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                    </svg>
+                                </motion.button>
+                                
+                                {/* DURÉE - Cachée sur très petit écran */}
+                                <span className="hidden sm:block text-[10px] md:text-xs text-gray-600 font-mono w-8 md:w-10 text-right flex-shrink-0">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
                             </div>
                         </div>
                     );
@@ -420,43 +450,178 @@ export default function AlbumPage({ params }: { params: any }) {
 
       </main>
 
-      {/* MODALE DE NOTATION */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-md p-4 animate-in fade-in duration-200">
-            <div className="bg-black/30 backdrop-blur-1xl p-8 rounded-3xl w-full max-w-md border border-white/20 shadow-2xl shadow-black/50 animate-in zoom-in-95">
-                <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-2xl font-black text-white">
-                        Noter {ratingTarget === 'album' ? "l'album" : "le titre"}
-                    </h2>
-                    <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white text-2xl transition">×</button>
-                </div>
-                
-                {ratingTarget !== 'album' && (
-                    <p className="text-[#00e054] text-sm font-bold mb-8 uppercase tracking-wide border-l-2 border-[#00e054] pl-3">{ratingTarget.trackName}</p>
+      {/* MODALE DE NOTATION - ANIMATION APP NATIVE */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div 
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* Backdrop avec blur */}
+            <motion.div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+            />
+            
+            {/* Contenu de la modale */}
+            <motion.div 
+              className="relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] p-6 md:p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/50 overflow-hidden"
+              initial={{ opacity: 0, scale: 0.9, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 50 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
+              {/* Glow effect derrière */}
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#00e054]/20 rounded-full blur-3xl pointer-events-none" />
+              
+              {/* Header */}
+              <div className="flex justify-between items-center mb-4 relative z-10">
+                <motion.h2 
+                  className="text-xl md:text-2xl font-black text-white"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  Noter {ratingTarget === 'album' ? "l'album" : "le titre"}
+                </motion.h2>
+                <motion.button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  ✕
+                </motion.button>
+              </div>
+              
+              {/* Nom du titre si c'est une piste */}
+              {ratingTarget !== 'album' && (
+                <motion.p 
+                  className="text-[#00e054] text-sm font-bold mb-6 uppercase tracking-wide border-l-2 border-[#00e054] pl-3"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  {ratingTarget.trackName}
+                </motion.p>
+              )}
+
+              {/* Étoiles avec animation */}
+              <motion.div 
+                className="flex justify-center mb-6 gap-1 md:gap-2 bg-white/[0.03] backdrop-blur-lg p-4 md:p-5 rounded-2xl border border-white/5"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                {[1, 2, 3, 4, 5].map((star, index) => (
+                  <motion.button 
+                    key={star} 
+                    onClick={() => setUserRating(star)} 
+                    onMouseEnter={() => setUserRating(star)}
+                    className={`text-4xl md:text-5xl focus:outline-none ${
+                      star <= userRating 
+                        ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]' 
+                        : 'text-gray-700 hover:text-gray-500'
+                    }`}
+                    initial={{ opacity: 0, scale: 0, rotate: -180 }}
+                    animate={{ 
+                      opacity: 1, 
+                      scale: star <= userRating ? 1.1 : 1, 
+                      rotate: 0 
+                    }}
+                    transition={{ 
+                      delay: 0.25 + index * 0.05,
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 15
+                    }}
+                    whileHover={{ scale: 1.2, rotate: 15 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    ★
+                  </motion.button>
+                ))}
+              </motion.div>
+              
+              {/* Indicateur de note */}
+              <AnimatePresence>
+                {userRating > 0 && (
+                  <motion.div 
+                    className="text-center mb-4"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <span className="text-[#00e054] font-black text-lg">{userRating}/5</span>
+                    <span className="text-gray-500 text-sm ml-2">
+                      {userRating === 1 && "Bof..."}
+                      {userRating === 2 && "Pas mal"}
+                      {userRating === 3 && "Bien !"}
+                      {userRating === 4 && "Très bien !"}
+                      {userRating === 5 && "Chef-d'œuvre !"}
+                    </span>
+                  </motion.div>
                 )}
+              </AnimatePresence>
 
-                <div className="flex justify-center mb-8 gap-2 bg-white/[0.06] backdrop-blur-lg p-4 rounded-2xl border border-white/10 shadow-lg shadow-black/10">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <button key={star} onClick={() => setUserRating(star)} onMouseEnter={() => setUserRating(star)} className={`text-5xl transition transform hover:scale-110 focus:outline-none ${star <= userRating ? 'text-[#00e054] drop-shadow-[0_0_10px_rgba(0,224,84,0.5)]' : 'text-gray-800'}`}>★</button>
-                    ))}
-                </div>
+              {/* Textarea */}
+              <motion.textarea
+                className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white focus:border-[#00e054]/40 focus:bg-black/40 focus:outline-none mb-6 h-28 resize-none text-sm placeholder-gray-600 transition-all duration-300"
+                placeholder="Votre avis (optionnel)..."
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              />
 
-                <textarea
-                    className="w-full bg-black/30 backdrop-blur-xl border border-white/15 rounded-2xl p-4 text-white focus:border-[#00e054]/40 focus:bg-black/40 focus:outline-none mb-6 h-32 resize-none text-sm placeholder-gray-500 shadow-lg shadow-black/10 transition-all duration-300"
-                    placeholder="Votre avis (optionnel)..."
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                />
-
-                <div className="flex justify-end gap-3">
-                    <button onClick={() => setIsModalOpen(false)} className="px-6 py-3 text-gray-500 hover:text-white text-sm font-bold transition">Annuler</button>
-                    <button onClick={handleSaveReview} disabled={isSaving} className="flex-1 py-3 bg-[#00e054] text-black font-black rounded-xl hover:bg-[#00c04b] transition uppercase tracking-widest shadow-lg shadow-green-900/20">
-                        {isSaving ? '...' : 'Publier'}
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
+              {/* Boutons */}
+              <motion.div 
+                className="flex gap-3"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <motion.button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="px-5 py-3 text-gray-400 hover:text-white text-sm font-bold transition rounded-xl hover:bg-white/5"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Annuler
+                </motion.button>
+                <motion.button 
+                  onClick={handleSaveReview} 
+                  disabled={isSaving || userRating === 0}
+                  className={`flex-1 py-3 font-black rounded-xl uppercase tracking-widest text-sm transition-all ${
+                    userRating > 0 
+                      ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20' 
+                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                  }`}
+                  whileHover={userRating > 0 ? { scale: 1.02 } : {}}
+                  whileTap={userRating > 0 ? { scale: 0.98 } : {}}
+                >
+                  {isSaving ? (
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="inline-block"
+                    >
+                      ⏳
+                    </motion.span>
+                  ) : 'Publier'}
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

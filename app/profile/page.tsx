@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import ProfileMenu from '@/components/ui/profile-menu';
+import Vinyl from '@/components/Vinyl';
+import TiltCard from '@/components/ui/tilt-card';
+import StackCard from '@/components/ui/stack-card';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -198,15 +202,17 @@ export default function ProfilePage() {
                 {[0, 1, 2, 3, 4].map((i) => {
                     const item = topAlbums[i];
                     return item ? (
-                        <div key={i} className="group relative flex-shrink-0 w-32 md:w-40 aspect-[2/3] md:aspect-square bg-white/5 rounded-3xl border border-white/10 overflow-hidden shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[#00e054]/20">
-                            <img src={item.image} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition duration-700" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center backdrop-blur-[2px]">
-                                <button onClick={() => removeFromTop(i, 'album')} className="w-8 h-8 rounded-full bg-white/10 border border-white/20 text-white hover:bg-red-500/80 hover:border-red-500 flex items-center justify-center transition">✕</button>
+                        <TiltCard key={i} className="flex-shrink-0 w-32 md:w-40 aspect-[2/3] md:aspect-square rounded-3xl shadow-2xl">
+                            <div className="w-full h-full bg-white/5 rounded-3xl border border-white/10 overflow-hidden relative">
+                                <img src={item.image} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-700" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                                    <button onClick={() => removeFromTop(i, 'album')} className="w-8 h-8 rounded-full bg-white/10 border border-white/20 text-white hover:bg-red-500/80 hover:border-red-500 flex items-center justify-center transition">✕</button>
+                                </div>
+                                <div className="absolute top-2 left-2 w-8 h-8 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
+                                    #{i + 1}
+                                </div>
                             </div>
-                            <div className="absolute top-2 left-2 w-8 h-8 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
-                                #{i + 1}
-                            </div>
-                        </div>
+                        </TiltCard>
                     ) : (
                         <button key={i} onClick={() => setSearchMode('album')} className="flex-shrink-0 w-32 md:w-40 aspect-[2/3] md:aspect-square bg-white/[0.03] rounded-3xl border border-white/5 border-dashed flex flex-col items-center justify-center hover:bg-white/[0.08] hover:border-white/20 group transition-all duration-300">
                             <span className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white/10 flex items-center justify-center text-white/30 group-hover:text-[#00e054] group-hover:border-[#00e054] transition text-lg md:text-xl">+</span>
@@ -228,17 +234,22 @@ export default function ProfilePage() {
                 {[0, 1, 2, 3, 4].map((i) => {
                     const item = topSongs[i];
                     return item ? (
-                        <div key={i} className="group relative flex-shrink-0 w-32 md:w-40 aspect-square bg-white/5 rounded-full border border-white/10 overflow-hidden shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-[#00e054]/20">
-                            <img src={item.image} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-700" />
-                            {/* Vinyle effect center */}
-                            <div className="absolute inset-0 m-auto w-3 h-3 md:w-4 md:h-4 bg-[#121212] rounded-full border border-white/20 z-10" />
-
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center backdrop-blur-[2px] z-20">
+                        <div key={i} className="group relative flex-shrink-0 pt-3 pr-3">
+                            {/* Composant Vinyl animé */}
+                            <Vinyl imageUrl={item.image} size="w-32 h-32 md:w-40 md:h-40" />
+                            
+                            {/* Bouton de suppression au survol */}
+                            <div className="absolute inset-0 mt-3 mr-3 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center backdrop-blur-[2px] z-20 rounded-full">
                                 <button onClick={() => removeFromTop(i, 'song')} className="w-8 h-8 rounded-full bg-white/10 border border-white/20 text-white hover:bg-red-500/80 hover:border-red-500 flex items-center justify-center transition">✕</button>
+                            </div>
+                            
+                            {/* Badge de position */}
+                            <div className="absolute top-0 right-0 w-9 h-9 md:w-10 md:h-10 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-30 border-2 border-[#080808] text-sm md:text-base">
+                                #{i + 1}
                             </div>
                         </div>
                     ) : (
-                        <button key={i} onClick={() => setSearchMode('song')} className="flex-shrink-0 w-32 md:w-40 aspect-square bg-white/[0.03] rounded-full border border-white/5 border-dashed flex items-center justify-center hover:bg-white/[0.08] hover:border-white/20 group transition-all duration-300">
+                        <button key={i} onClick={() => setSearchMode('song')} className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 bg-white/[0.03] rounded-full border border-white/5 border-dashed flex items-center justify-center hover:bg-white/[0.08] hover:border-white/20 group transition-all duration-300">
                             <span className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white/10 flex items-center justify-center text-white/30 group-hover:text-[#00e054] group-hover:border-[#00e054] transition text-lg md:text-xl">+</span>
                         </button>
                     );
@@ -295,58 +306,37 @@ export default function ProfilePage() {
             </div>
         </div>
 
-        {/* --- CONTENU CONDITIONNEL --- */}
-        {activeTab === 'lists' && (
-            <section>
+        {/* --- CONTENU CONDITIONNEL AVEC TRANSITIONS FLUIDES --- */}
+        <AnimatePresence mode="wait">
+          {activeTab === 'lists' && (
+            <motion.section
+              key="lists"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 md:mb-8">
                     <h2 className="text-xl md:text-2xl font-black text-white">Mes Listes</h2>
                     <Link href="/lists/create" className="text-[10px] md:text-xs bg-white/10 hover:bg-[#00e054] hover:text-black border border-white/10 text-white font-bold px-4 md:px-5 py-2 md:py-2.5 rounded-full transition duration-300 backdrop-blur-md text-center">+ Créer une liste</Link>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                    {lists.length > 0 ? lists.map((list) => (
-                       <Link key={list.id} href={`/lists/${list.id}`} className="group block">
-                       <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden">
-                           {/* Mosaïque Carrée style Spotify */}
-                           <div className="relative w-full aspect-square overflow-hidden bg-black/20">
-                               {list.albums && list.albums.length > 0 ? (
-                                   <div className="grid grid-cols-2 grid-rows-2 w-full h-full gap-0.5">
-                                       {list.albums.slice(0, 4).map((album: any, i: number) => (
-                                           <div key={i} className="relative w-full h-full bg-black/40">
-                                               <img
-                                                   src={album.image?.replace('100x100', '300x300')}
-                                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                   alt={album.name}
-                                               />
-                                               {/* Compteur sur la 4ème image si + de 4 albums */}
-                                               {i === 3 && list.albums.length > 4 && (
-                                                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[1px]">
-                                                       <span className="text-white font-bold text-sm md:text-base">+{list.albums.length - 4}</span>
-                                                   </div>
-                                               )}
-                                           </div>
-                                       ))}
-                                       {/* Cases vides si moins de 4 albums */}
-                                       {list.albums.length < 4 && Array.from({ length: 4 - list.albums.length }).map((_, i) => (
-                                           <div key={`empty-${i}`} className="bg-white/5 flex items-center justify-center w-full h-full">
-                                               <span className="text-white/10 text-lg">♫</span>
-                                           </div>
-                                       ))}
-                                   </div>
-                               ) : (
-                                   <div className="w-full h-full bg-white/5 flex items-center justify-center">
-                                       <span className="text-white/20 text-3xl">♪</span>
-                                   </div>
-                               )}
-                           </div>
-                   
-                           <div className="p-3 md:p-4">
-                               <h3 className="font-bold text-white text-sm md:text-base mb-1 group-hover:text-[#00e054] transition-colors line-clamp-1">{list.title}</h3>
-                               <p className="text-[10px] md:text-xs text-gray-400 line-clamp-1">
-                                   {list.description || `${list.albums?.length || 0} album${(list.albums?.length || 0) > 1 ? 's' : ''}`}
-                               </p>
-                           </div>
-                       </div>
-                   </Link> 
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
+                    {lists.length > 0 ? lists.map((list, index) => (
+                       <motion.div
+                         key={list.id}
+                         initial={{ opacity: 0, y: 20 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         transition={{ duration: 0.3, delay: index * 0.05 }}
+                       >
+                         <Link href={`/lists/${list.id}`} className="block">
+                             <StackCard 
+                                 images={list.albums?.map((a: any) => a.image?.replace('100x100', '300x300')) || []}
+                                 title={list.title}
+                                 subtitle={list.description || `${list.albums?.length || 0} titres`}
+                                 count={list.albums?.length}
+                             />
+                         </Link>
+                       </motion.div>
                     )) : (
                         <div className="col-span-2 md:col-span-3 lg:col-span-4 p-12 md:p-16 border border-dashed border-white/10 rounded-3xl text-center text-white/30 text-sm">
                             <div className="text-4xl mb-4 opacity-50">📚</div>
@@ -355,17 +345,29 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </div>
-            </section>
-        )}
+            </motion.section>
+          )}
 
-        {activeTab === 'reviews' && (
-            <section>
+          {activeTab === 'reviews' && (
+            <motion.section
+              key="reviews"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 md:mb-8">
                     <h2 className="text-xl md:text-2xl font-black text-white">Mes Critiques</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                    {reviews.length > 0 ? reviews.map((review) => (
-                    <div key={review.id} className="relative flex gap-4 md:gap-5 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10 group hover:bg-white/10 hover:border-white/20 transition duration-300">
+                    {reviews.length > 0 ? reviews.map((review, index) => (
+                    <motion.div 
+                      key={review.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      className="relative flex gap-4 md:gap-5 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10 group hover:bg-white/10 hover:border-white/20 transition duration-300"
+                    >
                         <Link href={`/album/${review.album_id}`} className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-lg border border-white/10">
                             <img src={review.album_image} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
                         </Link>
@@ -378,7 +380,7 @@ export default function ProfilePage() {
                             <div className="text-[#00e054] text-xs tracking-wider my-1">{"★".repeat(review.rating)}</div>
                             <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed italic">"{review.review_text}"</p>
                         </div>
-                    </div>
+                    </motion.div>
                     )) : (
                         <div className="col-span-1 md:col-span-2 p-12 md:p-16 border border-dashed border-white/10 rounded-3xl text-center text-white/30 text-sm">
                             <div className="text-4xl mb-4 opacity-50">✍️</div>
@@ -387,32 +389,44 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </div>
-            </section>
-        )}
+            </motion.section>
+          )}
 
-        {activeTab === 'likes' && (
-            <section>
+          {activeTab === 'likes' && (
+            <motion.section
+              key="likes"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 md:mb-8">
                     <h2 className="text-xl md:text-2xl font-black text-white">Mes Likes</h2>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                    {likedAlbums.length > 0 ? likedAlbums.map((like) => (
-                        <Link key={like.id} href={`/album/${like.album_id}`} className="group block">
-                            <div className="relative aspect-square overflow-hidden rounded-2xl shadow-lg bg-[#121212] mb-3 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300">
-                                <img 
-                                    src={like.album_image?.replace('100x100', '400x400')} 
-                                    alt={like.album_name} 
-                                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500 group-hover:scale-110"
-                                />
-                                <div className="absolute top-2 right-2 w-8 h-8 bg-[#00e054]/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg">
-                                    <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <h3 className="font-bold text-xs text-white truncate group-hover:text-[#00e054] transition">{like.album_name}</h3>
-                            <p className="text-[10px] text-gray-400 truncate uppercase tracking-wide">{like.artist_name}</p>
-                        </Link>
+                    {likedAlbums.length > 0 ? likedAlbums.map((like, index) => (
+                        <motion.div
+                          key={like.id}
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3, delay: index * 0.03 }}
+                        >
+                          <Link href={`/album/${like.album_id}`} className="group block">
+                              <div className="relative mb-3 flex justify-center">
+                                  {/* Composant Vinyl pour les albums likés */}
+                                  <Vinyl imageUrl={like.album_image?.replace('100x100', '400x400')} size="w-full aspect-square" />
+                                  
+                                  {/* Badge coeur animé */}
+                                  <div className="absolute top-2 right-2 w-8 h-8 bg-[#00e054]/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg z-20 group-hover:scale-110 transition-transform">
+                                      <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                      </svg>
+                                  </div>
+                              </div>
+                              <h3 className="font-bold text-xs text-white truncate group-hover:text-[#00e054] transition">{like.album_name}</h3>
+                              <p className="text-[10px] text-gray-400 truncate uppercase tracking-wide">{like.artist_name}</p>
+                          </Link>
+                        </motion.div>
                     )) : (
                         <div className="col-span-2 md:col-span-4 lg:col-span-5 p-12 md:p-16 border border-dashed border-white/10 rounded-3xl text-center text-white/30 text-sm">
                             <div className="text-4xl mb-4 opacity-50">❤️</div>
@@ -421,8 +435,9 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </div>
-            </section>
-        )}
+            </motion.section>
+          )}
+        </AnimatePresence>
 
       </main>
 
