@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'export', // Obligatoire pour Capacitor
+  images: {
+    unoptimized: true, // Obligatoire car Next/Image ne marche pas sans serveur
+  },
 };
 
 export default nextConfig;

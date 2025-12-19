@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
 import Vinyl from '@/components/Vinyl';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Review {
   id: number;
@@ -20,6 +21,7 @@ interface Review {
     username: string;
     avatar_url?: string;
   };
+  preview_url_cache?: string;
 }
 
 interface AudioState {
@@ -86,32 +88,32 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
           if (currentUser) {
             const { data: userAlbumLike } = await supabase
               .from('album_likes')
-              .select('id')
-              .eq('album_id', review.album_id)
-              .eq('user_id', currentUser.id)
-              .maybeSingle();
-
+            .select('id')
+            .eq('album_id', review.album_id)
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+          
             setHasLiked(!!userAlbumLike);
           }
-        } else {
+          } else {
           // Pour les vraies reviews, utiliser la table likes
-          const { count: likesCount } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact', head: true })
+        const { count: likesCount } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
             .eq('review_id', review.id);
 
-          setLikesCount(likesCount || 0);
+        setLikesCount(likesCount || 0);
 
           // Vérifier si l'utilisateur actuel a liké
-          if (currentUser) {
-            const { data: userLike } = await supabase
-              .from('likes')
-              .select('id')
+        if (currentUser) {
+          const { data: userLike } = await supabase
+            .from('likes')
+            .select('id')
               .eq('review_id', review.id)
-              .eq('user_id', currentUser.id)
-              .maybeSingle();
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
 
-            setHasLiked(!!userLike);
+          setHasLiked(!!userLike);
           }
         }
       } catch (error) {
@@ -183,6 +185,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     }
 
     // Créer une nouvelle review "découverte" pour cet utilisateur
+    // On ne met PAS de rating (null) pour ne pas polluer les notes
     const { data: newReview, error } = await supabase
       .from('reviews')
       .insert({
@@ -192,7 +195,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         album_name: review.album_name,
         album_image: review.album_image,
         artist_name: review.artist_name,
-        rating: 0, // Pas de note pour une découverte
+        rating: null, // Pas de note - l'utilisateur n'a pas noté, juste commenté
         review_text: '', // Pas de texte pour une découverte
       })
       .select('id')
@@ -248,23 +251,23 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         }
       } else {
         // Pour les vraies reviews, utiliser la table likes
-        if (previousHasLiked) {
-          const { error } = await supabase
-            .from('likes')
-            .delete()
-            .eq('user_id', currentUser.id)
+      if (previousHasLiked) {
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUser.id)
             .eq('review_id', review.id);
 
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('likes')
-            .insert({
-              user_id: currentUser.id,
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id: currentUser.id,
               review_id: review.id
-            });
+          });
 
-          if (error) throw error;
+        if (error) throw error;
         }
       }
     } catch (error) {
@@ -332,9 +335,11 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
       </h3>
 
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-[#00e054] font-bold text-lg">
-          {"★".repeat(review.rating)}
-        </span>
+        {review.rating && review.rating > 0 && (
+          <span className="text-[#00e054] font-bold text-lg">
+            {"★".repeat(review.rating)}
+          </span>
+        )}
         <span className="text-gray-400 text-sm">
           {new Date(review.created_at).toLocaleDateString('fr-FR')}
         </span>
@@ -452,43 +457,113 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
       </div>
 
       {/* MODALE COMMENTAIRES FONCTIONNELLE */}
+      <AnimatePresence>
       {showComments && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[80vh]">
+        <motion.div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          {/* Backdrop avec blur */}
+          <motion.div 
+            className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowComments(false)}
+          />
+
+          <motion.div 
+            className="relative bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[80vh]"
+            initial={{ opacity: 0, scale: 0.9, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 50 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          >
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">Commentaires</h2>
-              <button onClick={() => setShowComments(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
+              <motion.h2 
+                className="text-2xl font-bold text-white"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                Commentaires
+              </motion.h2>
+              <motion.button 
+                onClick={() => setShowComments(false)} 
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
+                whileHover={{ scale: 1.1, rotate: 90 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                ×
+              </motion.button>
             </div>
 
             {/* Liste des commentaires */}
             <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
-              {comments.length > 0 ? comments.map(c => (
-                <div key={c.id} className="flex gap-3 bg-white/5 p-3 rounded-xl border border-white/5">
-                  <div className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400">
+              <AnimatePresence mode="popLayout">
+              {comments.length > 0 ? comments.map((c, index) => (
+                <motion.div 
+                  key={c.id} 
+                  className="flex gap-3 bg-white/5 p-3 rounded-xl border border-white/5 hover:bg-white/[0.08] transition-all"
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -100, scale: 0.8 }}
+                  transition={{ 
+                    type: "spring",
+                    stiffness: 500,
+                    damping: 30,
+                    delay: index * 0.05
+                  }}
+                  layout
+                >
+                  <Link href={`/user/${c.profiles?.username}`} className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400 hover:border-[#00e054] transition-all">
                     {c.profiles?.avatar_url ? (
                       <img src={c.profiles.avatar_url} alt={c.profiles.username} className="w-full h-full object-cover"/>
                     ) : (
                       c.profiles?.username?.[0]?.toUpperCase()
                     )}
-                  </div>
+                  </Link>
                   <div className="flex-1">
-                    <span className="text-xs font-bold text-[#00e054] block mb-1">{c.profiles?.username}</span>
+                    <Link href={`/user/${c.profiles?.username}`} className="text-xs font-bold text-[#00e054] block mb-1 hover:text-[#00c04b] transition">{c.profiles?.username}</Link>
                     <p className="text-sm text-gray-300 leading-relaxed">{c.content}</p>
                     <span className="text-xs text-gray-500 mt-1 block">
                       {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                </div>
+                </motion.div>
               )) : (
-                <div className="text-center text-gray-500 py-10 italic">
-                  <div className="text-4xl mb-4">💬</div>
+                <motion.div 
+                  className="text-center text-gray-500 py-10 italic"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <motion.div 
+                    className="text-4xl mb-4"
+                    animate={{ 
+                      rotate: [0, -10, 10, -10, 0],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+                  >
+                    💬
+                  </motion.div>
                   Soyez le premier à commenter cette critique !
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
 
             {/* Formulaire de commentaire */}
-            <div className="flex gap-2 pt-4 border-t border-white/10">
+            <motion.div 
+              className="flex gap-2 pt-4 border-t border-white/10"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
               <input
                 className="flex-1 bg-black border border-white/20 rounded-full px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-[#00e054] focus:outline-none transition"
                 value={newComment}
@@ -502,17 +577,20 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
                   }
                 }}
               />
-              <button
+              <motion.button
                 onClick={handlePostComment}
                 disabled={!newComment.trim() || !currentUser}
                 className="bg-[#00e054] text-black w-12 h-12 rounded-full font-bold flex items-center justify-center hover:bg-[#00c04b] disabled:opacity-50 disabled:cursor-not-allowed transition"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 ➤
-              </button>
-            </div>
-          </div>
-        </div>
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -571,7 +649,7 @@ export default function DiscoverPage() {
       const data = await response.json();
 
       console.log('📦 Réponse API Feed:', data);
-      
+
       if (data.success && data.items && data.items.length > 0) {
         console.log(`✅ ${data.items.length} items initiaux chargés`);
         console.log('🎵 Premier item:', data.items[0]);
@@ -729,7 +807,7 @@ export default function DiscoverPage() {
 
     try {
       // Vérifier le cache d'abord (mais ne pas bloquer sur null)
-      const cached = previewCacheRef.current.get(cacheKey);
+        const cached = previewCacheRef.current.get(cacheKey);
       if (cached) {
         console.log(`💾 Cache hit: ${albumName}`);
         return cached;
@@ -740,9 +818,9 @@ export default function DiscoverPage() {
       // STRATÉGIE SIMPLE : Une seule recherche directe
       const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, ' ').trim().substring(0, 60);
       const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=5`);
-      const data = await response.json();
+          const data = await response.json();
 
-      if (data.results && data.results.length > 0) {
+          if (data.results && data.results.length > 0) {
         // Prendre le premier résultat avec preview
         const trackWithPreview = data.results.find((t: any) => t.previewUrl);
         if (trackWithPreview?.previewUrl) {
@@ -775,13 +853,13 @@ export default function DiscoverPage() {
         currentAudioRef.current.pause();
         currentAudioRef.current.currentTime = 0;
         currentAudioRef.current = null;
-      }
+    }
 
-      // Marquer comme en chargement
-      setAudioStates(prev => ({
-        ...prev,
+    // Marquer comme en chargement
+    setAudioStates(prev => ({
+      ...prev,
         [albumId]: { audio: null, isPlaying: false, previewUrl: null, isLoading: true, lastPlayAttempt: Date.now() }
-      }));
+    }));
 
       // Récupérer le preview (utiliser le cache si disponible)
       let previewUrl = cachedPreviewUrl || null;
@@ -792,14 +870,14 @@ export default function DiscoverPage() {
         console.log('💾 Utilisation du preview caché');
       }
       
-      if (!previewUrl) {
+        if (!previewUrl) {
         console.log('❌ Pas de preview disponible');
-        setAudioStates(prev => ({
-          ...prev,
-          [albumId]: { ...prev[albumId], isLoading: false }
-        }));
-        return;
-      }
+          setAudioStates(prev => ({
+            ...prev,
+            [albumId]: { ...prev[albumId], isLoading: false }
+          }));
+          return;
+        }
 
       // Créer et configurer l'audio
       const audio = new Audio(previewUrl);
@@ -891,7 +969,7 @@ export default function DiscoverPage() {
               console.log(`✓ Carte déjà active: ${mostVisibleCard}`);
               return prev;
             }
-            
+
             console.log(`🎯 Changement de carte: ${prev} → ${mostVisibleCard}`);
             return mostVisibleCard;
           });
@@ -1010,7 +1088,6 @@ export default function DiscoverPage() {
         
         // Petit délai pour laisser le scroll se stabiliser
         const timer = setTimeout(() => {
-          // @ts-ignore - preview_url_cache peut exister sur les reviews iTunes
           playAudio(currentVisibleCard, review.album_name, review.artist_name, review.preview_url_cache);
         }, 200);
         

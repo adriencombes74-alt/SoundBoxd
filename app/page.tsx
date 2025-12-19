@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
+import { motion, AnimatePresence } from 'framer-motion';
+
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export default function Home() {
 
     const { data: friendsData } = await supabase
       .from('reviews')
-      .select('*')
+      .select('*, comments(content, created_at)')
       .in('user_name', usernames)
       .order('created_at', { ascending: false })
       .limit(20);
@@ -53,95 +55,94 @@ export default function Home() {
     setFriendReviews(friendsData || []);
   };
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    if (user) {
-        fetchMyLikes(user.id);
-        fetchFriendReviews(user.id);
-    }
-  };
-
-  const fetchData = async () => {
-    setLoading(true);
-
-    // 1. RÉCUPÉRATION DES DONNÉES POUR LES TOPS
-    const { data: allReviews } = await supabase
-      .from('reviews')
-      .select('*')
-      .not('rating', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(300);
-
-    if (allReviews) {
-        const albumMap = new Map();
-        const songMap = new Map();
-
-        allReviews.forEach((review) => {
-            // Si track_id existe, c'est une chanson
-            if (review.track_id) {
-                if (!songMap.has(review.track_id)) {
-                    songMap.set(review.track_id, {
-                        id: review.track_id,
-                        albumId: review.album_id,
-                        name: review.track_name,
-                        artist: review.artist_name,
-                        image: review.album_image,
-                        totalRating: 0,
-                        count: 0
-                    });
-                }
-                const song = songMap.get(review.track_id);
-                song.totalRating += review.rating;
-                song.count += 1;
-            }
-            // Sinon, c'est un album complet
-            else {
-                if (!albumMap.has(review.album_id)) {
-                    albumMap.set(review.album_id, {
-                        id: review.album_id,
-                        name: review.album_name,
-                        artist: review.artist_name,
-                        image: review.album_image,
-                        totalRating: 0,
-                        count: 0
-                    });
-                }
-                const album = albumMap.get(review.album_id);
-                album.totalRating += review.rating;
-                album.count += 1;
-            }
-        });
-
-        // Tri et Stockage Albums
-        const sortedAlbums = Array.from(albumMap.values())
-            .map((a: any) => ({ ...a, average: a.totalRating / a.count }))
-            .sort((a, b) => b.average - a.average)
-            .slice(0, 20);
-        setTopAlbums(sortedAlbums);
-
-        // Tri et Stockage Chansons
-        const sortedSongs = Array.from(songMap.values())
-            .map((s: any) => ({ ...s, average: s.totalRating / s.count }))
-            .sort((a, b) => b.average - a.average)
-            .slice(0, 20);
-        setTopSongs(sortedSongs);
-    }
-
-    // 2. RÉCENT (Derniers avis globaux)
-    const { data: recData } = await supabase
-      .from('reviews')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setRecentReviews(recData || []);
-
-    setLoading(false);
-  };
-
   useEffect(() => {
-    checkUser();
-    fetchData();
+    const initData = async () => {
+        // 1. Check User
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+        if (user) {
+            fetchMyLikes(user.id);
+            fetchFriendReviews(user.id);
+        }
+
+        // 2. Fetch Global Data
+        setLoading(true);
+        
+        // RECUPERATION DES DONNÉES POUR LES TOPS
+        const { data: allReviews } = await supabase
+        .from('reviews')
+        .select('*')
+        .not('rating', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(300);
+
+        if (allReviews) {
+            const albumMap = new Map();
+            const songMap = new Map();
+
+            allReviews.forEach((review) => {
+                // Si track_id existe, c'est une chanson
+                if (review.track_id) {
+                    if (!songMap.has(review.track_id)) {
+                        songMap.set(review.track_id, {
+                            id: review.track_id,
+                            albumId: review.album_id,
+                            name: review.track_name,
+                            artist: review.artist_name,
+                            image: review.album_image,
+                            totalRating: 0,
+                            count: 0
+                        });
+                    }
+                    const song = songMap.get(review.track_id);
+                    song.totalRating += review.rating;
+                    song.count += 1;
+                }
+                // Sinon, c'est un album complet
+                else {
+                    if (!albumMap.has(review.album_id)) {
+                        albumMap.set(review.album_id, {
+                            id: review.album_id,
+                            name: review.album_name,
+                            artist: review.artist_name,
+                            image: review.album_image,
+                            totalRating: 0,
+                            count: 0
+                        });
+                    }
+                    const album = albumMap.get(review.album_id);
+                    album.totalRating += review.rating;
+                    album.count += 1;
+                }
+            });
+
+            // Tri et Stockage Albums
+            const sortedAlbums = Array.from(albumMap.values())
+                .map((a: any) => ({ ...a, average: a.totalRating / a.count }))
+                .sort((a, b) => b.average - a.average)
+                .slice(0, 20);
+            setTopAlbums(sortedAlbums);
+
+            // Tri et Stockage Chansons
+            const sortedSongs = Array.from(songMap.values())
+                .map((s: any) => ({ ...s, average: s.totalRating / s.count }))
+                .sort((a, b) => b.average - a.average)
+                .slice(0, 20);
+            setTopSongs(sortedSongs);
+        }
+
+        // RECENT (Derniers avis globaux)
+        const { data: recData } = await supabase
+        .from('reviews')
+        .select('*, comments(content, created_at)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+        setRecentReviews(recData || []);
+
+        setLoading(false);
+    };
+
+    initData();
   }, []);
 
 
@@ -168,7 +169,6 @@ export default function Home() {
     const { data: cData } = await supabase.from('comments').select('*, profiles(username, avatar_url)').eq('review_id', review.id).order('created_at', { ascending: true });
     setComments(cData || []);
     const { data: lData } = await supabase.from('likes').select('profiles(username)').eq('review_id', review.id);
-    // @ts-ignore
     setLikers(lData?.map((l: any) => l.profiles) || []);
   };
 
@@ -183,45 +183,75 @@ export default function Home() {
   };
 
   // Composants UI
-  const ReviewCard = ({ review }: { review: any }) => (
-    <div className="group relative bg-[#121212] rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col h-full">
-        <Link href={`/album/${review.album_id}`} className="relative aspect-square overflow-hidden rounded-t-2xl">
-            <img 
-                src={review.album_image?.replace('100x100', '400x400')} 
-                className="w-full h-full object-cover transition duration-700 group-hover:scale-110" 
-            />
-            <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-[#00e054]">
-                ★ {review.rating}
-            </div>
-        </Link>
-        <div className="p-4 flex flex-col flex-1">
-            <h3 className="font-bold text-white text-sm truncate mb-1">{review.track_name || review.album_name}</h3>
-            {review.track_name && <span className="text-[10px] text-[#00e054] uppercase font-bold mb-1 block">Chanson</span>}
-            
-            <div className="mt-auto flex justify-between items-center pt-3 border-t border-white/5">
-                <Link href={`/user/${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-[8px] text-white">
-                        {review.user_name?.[0]?.toUpperCase()}
-                    </div>
-                    {review.user_name}
-                </Link>
-                
-                {/* BOUTONS AJOUTÉS ICI */}
-                <div className="flex gap-3 text-xs text-gray-500">
-                    <button 
-                        onClick={() => handleLike(review)} 
-                        className={`flex items-center gap-1 hover:text-white transition ${myLikes.has(review.id) ? 'text-pink-500' : ''}`}
-                    >
-                        <span>{myLikes.has(review.id) ? '♥' : '♡'}</span> {review.like_count || 0}
-                    </button>
-                    <button onClick={() => openModal(review)} className="flex items-center gap-1 hover:text-white transition">
-                        💬
-                    </button>
+  const ReviewCard = ({ review }: { review: any }) => {
+    // Récupérer le texte à afficher : review_text ou premier commentaire
+    const displayText = review.review_text || 
+      (review.comments && review.comments.length > 0 ? review.comments[0].content : null);
+    
+    // Déterminer si c'est un commentaire (pas un avis)
+    const isComment = !review.review_text && review.comments && review.comments.length > 0;
+    
+    return (
+      <div className="group relative bg-[#121212] rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col h-full">
+          <Link href={`/album/${review.album_id}`} className="relative aspect-square overflow-hidden rounded-t-2xl">
+              <img 
+                  src={review.album_image?.replace('100x100', '400x400')} 
+                  className="w-full h-full object-cover transition duration-700 group-hover:scale-110" 
+              />
+              {/* Afficher la note seulement si elle existe et > 0 */}
+              {review.rating && review.rating > 0 && (
+                <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-[#00e054]">
+                    ★ {review.rating}
                 </div>
-            </div>
-        </div>
-    </div>
-  );
+              )}
+          </Link>
+          <div className="p-3 md:p-4 flex flex-col flex-1">
+              {/* Titre de l'album/chanson */}
+              <h3 className="font-bold text-white text-sm truncate mb-1">{review.track_name || review.album_name}</h3>
+              {review.track_name && <span className="text-[10px] text-[#00e054] uppercase font-bold mb-1 block">Chanson</span>}
+              
+              {/* AVIS OU COMMENTAIRE DE L'UTILISATEUR - Affiché directement */}
+              {displayText && (
+                  <div className="my-2 py-2 border-y border-white/5">
+                      {isComment && (
+                        <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1 block">💬 Commentaire</span>
+                      )}
+                      <p className="text-[11px] md:text-xs text-gray-400 italic leading-relaxed line-clamp-3">
+                          &ldquo;{displayText}&rdquo;
+                      </p>
+                  </div>
+              )}
+              
+              {/* Footer avec utilisateur et actions */}
+              <div className="mt-auto flex justify-between items-center pt-2">
+                  <Link href={`/user/${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-[8px] text-white">
+                          {review.user_name?.[0]?.toUpperCase()}
+                      </div>
+                      <span className="truncate max-w-[60px] md:max-w-[80px]">{review.user_name}</span>
+                  </Link>
+                  
+                  {/* Boutons d'interaction */}
+                  <div className="flex gap-2 md:gap-3 text-xs text-gray-500">
+                      <button 
+                          onClick={() => handleLike(review)} 
+                          className={`flex items-center gap-1 hover:text-white transition ${myLikes.has(review.id) ? 'text-pink-500' : ''}`}
+                      >
+                          <span>{myLikes.has(review.id) ? '♥' : '♡'}</span> {review.like_count || 0}
+                      </button>
+                      <button 
+                          onClick={() => openModal(review)} 
+                          className="flex items-center gap-1 hover:text-white transition"
+                          title="Voir les commentaires"
+                      >
+                          💬 {review.comments?.length > 0 && <span>{review.comments.length}</span>}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+    );
+  };
 
   // Carte Album / Musique pour les Tops
   const TopItemCard = ({ item, rank, type }: { item: any, rank: number, type: 'album' | 'song' }) => (
@@ -379,8 +409,16 @@ export default function Home() {
             <div className="flex justify-between items-end mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">
                 <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">✨ Derniers Avis</h2>
             </div>
-            <div className="flex gap-3 md:gap-6 overflow-x-auto scrollbar-hide">
-                {loading ? [1,2,3,4,5].map(i => <div key={i} className="flex-shrink-0 w-48 md:w-56 h-48 md:h-64 bg-white/5 rounded-2xl animate-pulse"/>) : recentReviews.slice(0, limitRecent).map(r => <div key={r.id} className="flex-shrink-0 w-48 md:w-56"><ReviewCard review={r} /></div>)}
+            <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2">
+                {loading ? (
+                    [1,2,3,4,5].map(i => <div key={i} className="flex-shrink-0 w-52 md:w-64 h-72 md:h-80 bg-white/5 rounded-2xl animate-pulse"/>)
+                ) : (
+                    recentReviews.slice(0, limitRecent).map(r => (
+                        <div key={r.id} className="flex-shrink-0 w-52 md:w-64">
+                            <ReviewCard review={r} />
+                        </div>
+                    ))
+                )}
             </div>
             {recentReviews.length > limitRecent && (
                 <div className="mt-6 md:mt-8 text-center">
@@ -398,12 +436,16 @@ export default function Home() {
                     <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">👥 Activité des Amis</h2>
                 </div>
                 {friendReviews.length > 0 ? (
-                    <div className="flex gap-3 md:gap-6 overflow-x-auto scrollbar-hide">
-                        {friendReviews.slice(0, limitFriends).map(r => <div key={r.id} className="flex-shrink-0 w-48 md:w-56"><ReviewCard review={r} /></div>)}
+                    <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2">
+                        {friendReviews.slice(0, limitFriends).map(r => (
+                            <div key={r.id} className="flex-shrink-0 w-52 md:w-64">
+                                <ReviewCard review={r} />
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="text-center py-8 md:py-12 border border-dashed border-white/10 rounded-2xl mx-2 md:mx-0">
-                        <p className="text-gray-500 mb-2 text-sm md:text-base">Vos amis n'ont rien posté récemment.</p>
+                        <p className="text-gray-500 mb-2 text-sm md:text-base">Vos amis n&apos;ont rien posté récemment.</p>
                         <Link href="/community" className="text-[#00e054] hover:underline font-bold text-sm">Trouver des gens à suivre →</Link>
                     </div>
                 )}
@@ -420,32 +462,120 @@ export default function Home() {
       </main>
 
       {/* MODALE */}
+      <AnimatePresence>
       {selectedReview && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/ backdrop-blur-md p-2 md:p-4 animate-in fade-in duration-200">
-            <div className="bg-black/30 backdrop-blur-2xl p-4 md:p-8 rounded-2xl md:rounded-3xl w-full max-w-sm md:max-w-md border border-white/20 shadow-2xl shadow-black/50 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+        <motion.div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+            {/* Backdrop avec blur */}
+            <motion.div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedReview(null)}
+            />
+
+            <motion.div 
+              className="relative bg-black/30 backdrop-blur-2xl p-4 md:p-8 rounded-2xl md:rounded-3xl w-full max-w-sm md:max-w-md border border-white/20 shadow-2xl shadow-black/50 max-h-[90vh] flex flex-col"
+              initial={{ opacity: 0, scale: 0.9, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 50 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
                 <div className="flex justify-between items-center mb-3 md:mb-4">
-                    <h2 className="text-lg md:text-2xl font-bold text-white pr-2">{selectedReview.album_name}</h2>
-                    <button onClick={() => setSelectedReview(null)} className="text-gray-500 hover:text-white text-xl md:text-2xl">✕</button>
+                    <motion.h2 
+                      className="text-lg md:text-2xl font-bold text-white pr-2"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 }}
+                    >
+                      {selectedReview.album_name}
+                    </motion.h2>
+                    <motion.button 
+                      onClick={() => setSelectedReview(null)} 
+                      className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
+                      whileHover={{ scale: 1.1, rotate: 90 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      ✕
+                    </motion.button>
                 </div>
-                <p className="text-gray-300 italic mb-6 md:mb-8 leading-relaxed text-sm md:text-base">"{selectedReview.review_text}"</p>
+                <motion.p 
+                  className="text-gray-300 italic mb-6 md:mb-8 leading-relaxed text-sm md:text-base"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  &ldquo;{selectedReview.review_text}&rdquo;
+                </motion.p>
 
                 <div className="flex-1 overflow-y-auto space-y-3 md:space-y-4 max-h-48 md:max-h-60 mb-4 md:mb-6">
-                     {comments.map(c => (
-                        <div key={c.id} className="flex gap-3 md:gap-4">
-                            <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/[0.06] backdrop-blur-xl flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/15 shadow-lg shadow-black/10 text-gray-400">
+                     <AnimatePresence mode="popLayout">
+                     {comments.map((c, index) => (
+                        <motion.div 
+                          key={c.id} 
+                          className="flex gap-3 md:gap-4"
+                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: -100, scale: 0.8 }}
+                          transition={{ 
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 30,
+                            delay: index * 0.05
+                          }}
+                          layout
+                        >
+                            <Link href={`/user/${c.profiles?.username}`} className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/[0.06] backdrop-blur-xl flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/15 shadow-lg shadow-black/10 text-gray-400 hover:border-[#00e054] transition-all">
                                 {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
-                            </div>
+                            </Link>
                             <div className="flex-1">
                                 <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-2xl px-3 py-2 md:px-4 md:py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300">
-                                    <div className="text-[10px] md:text-xs font-bold text-white mb-1">{c.profiles?.username}</div>
+                                    <Link href={`/user/${c.profiles?.username}`} className="text-[10px] md:text-xs font-bold text-white mb-1 block hover:text-[#00e054] transition">{c.profiles?.username}</Link>
                                     <div className="text-[10px] md:text-xs text-gray-300 leading-relaxed">{c.content}</div>
+                                    <div className="text-[8px] md:text-[10px] text-gray-500 mt-1">
+                                      {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </motion.div>
                      ))}
+                     </AnimatePresence>
+                     
+                     {/* Message si aucun commentaire */}
+                     {comments.length === 0 && (
+                       <motion.div 
+                         className="text-center py-8 text-gray-500"
+                         initial={{ opacity: 0 }}
+                         animate={{ opacity: 1 }}
+                         transition={{ delay: 0.2 }}
+                       >
+                         <motion.div 
+                           className="text-3xl mb-2"
+                           animate={{ 
+                             rotate: [0, -10, 10, -10, 0],
+                             scale: [1, 1.1, 1]
+                           }}
+                           transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+                         >
+                           💬
+                         </motion.div>
+                         <p className="text-xs">Soyez le premier à commenter !</p>
+                       </motion.div>
+                     )}
                 </div>
 
-                <div className="flex gap-3">
+                <motion.div 
+                  className="flex gap-3"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
                     <div className="flex-1 bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-full px-4 py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300 focus-within:border-[#00e054]/40 focus-within:bg-white/[0.15]">
                         <input
                             className="w-full bg-transparent text-white text-xs md:text-sm placeholder-gray-400 outline-none"
@@ -455,16 +585,20 @@ export default function Home() {
                             onKeyPress={e => e.key === 'Enter' && postComment()}
                         />
                     </div>
-                    <button
+                    <motion.button
                         onClick={postComment}
-                        className="bg-[#00e054] hover:bg-[#00e054]/80 text-black px-4 py-3 rounded-full font-bold text-sm md:text-base shadow-lg shadow-[#00e054]/20 hover:shadow-xl hover:shadow-[#00e054]/30 transition-all duration-300 hover:scale-105"
+                        className="bg-[#00e054] hover:bg-[#00e054]/80 text-black px-4 py-3 rounded-full font-bold text-sm md:text-base shadow-lg shadow-[#00e054]/20 hover:shadow-xl hover:shadow-[#00e054]/30 transition-all duration-300"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        disabled={!newComment.trim()}
                     >
                         ➤
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </motion.button>
+                </motion.div>
+            </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

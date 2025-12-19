@@ -48,7 +48,7 @@ export default function ProfilePage() {
 
     const { data: reviewsData } = await supabase
       .from('reviews')
-      .select('*')
+      .select('*, comments(content, created_at)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false } as any);
     setReviews(reviewsData || []);
@@ -63,15 +63,13 @@ export default function ProfilePage() {
       .from('follows')
       .select(`follower_id, profiles!follows_follower_id_fkey (id, username, avatar_url)`)
       .eq('following_id', userId);
-    // @ts-ignore
-    setFollowersList(followersData?.map(item => item.profiles).filter(Boolean) || []);
+    setFollowersList(followersData?.map((item: any) => item.profiles).filter(Boolean) || []);
 
     const { data: followingData } = await supabase
       .from('follows')
       .select(`following_id, profiles!follows_following_id_fkey (id, username, avatar_url)`)
       .eq('follower_id', userId);
-    // @ts-ignore
-    setFollowingList(followingData?.map(item => item.profiles).filter(Boolean) || []);
+    setFollowingList(followingData?.map((item: any) => item.profiles).filter(Boolean) || []);
 
     setLoading(false);
   };
@@ -360,7 +358,13 @@ export default function ProfilePage() {
                     <h2 className="text-xl md:text-2xl font-black text-white">Mes Critiques</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                    {reviews.length > 0 ? reviews.map((review, index) => (
+                    {reviews.length > 0 ? reviews.map((review, index) => {
+                        // Récupérer le texte à afficher : review_text ou premier commentaire
+                        const displayText = review.review_text || 
+                          (review.comments && review.comments.length > 0 ? review.comments[0].content : null);
+                        const isComment = !review.review_text && review.comments && review.comments.length > 0;
+                        
+                        return (
                     <motion.div 
                       key={review.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -377,11 +381,25 @@ export default function ProfilePage() {
                                 <button onClick={() => handleDeleteReview(review.id)} disabled={deletingId === review.id} className="text-white/20 hover:text-red-400 transition flex-shrink-0">✕</button>
                             </div>
                             <p className="text-gray-500 text-xs mb-1">{review.artist_name}</p>
-                            <div className="text-[#00e054] text-xs tracking-wider my-1">{"★".repeat(review.rating)}</div>
-                            <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed italic">"{review.review_text}"</p>
+                            {/* Afficher les étoiles seulement si rating existe et > 0 */}
+                            {review.rating && review.rating > 0 && (
+                              <div className="text-[#00e054] text-xs tracking-wider my-1">{"★".repeat(review.rating)}</div>
+                            )}
+                            {/* Afficher le texte ou le commentaire */}
+                            {displayText ? (
+                              <div>
+                                {isComment && (
+                                  <span className="text-[9px] text-gray-500 uppercase tracking-wide">💬 Commentaire</span>
+                                )}
+                                <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed italic">&ldquo;{displayText}&rdquo;</p>
+                              </div>
+                            ) : (
+                              <p className="text-gray-500 text-xs italic">Pas de commentaire</p>
+                            )}
                         </div>
                     </motion.div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="col-span-1 md:col-span-2 p-12 md:p-16 border border-dashed border-white/10 rounded-3xl text-center text-white/30 text-sm">
                             <div className="text-4xl mb-4 opacity-50">✍️</div>
                             <p>Aucune critique publiée.</p>
