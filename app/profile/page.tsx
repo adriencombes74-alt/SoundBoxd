@@ -112,13 +112,13 @@ export default function ProfilePage() {
       </div>
 
       {/* --- NAVBAR FLOTTANTE --- */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
         <nav className=" flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] 
         ">
             <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase text-white flex items-center gap-0">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
-            <div className="flex items-center gap-2 md:gap-6 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+            <div className="hidden md:flex items-center gap-2 md:gap-6 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
                 <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
                 <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
                     <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
@@ -133,7 +133,7 @@ export default function ProfilePage() {
       </div>
 
       {/* --- HEADER PROFIL --- */}
-      <header className="relative pt-32 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 z-10">
+      <header className="relative pt-12 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 z-10">
         <div className="max-w-4xl mx-auto flex flex-col items-center md:items-end md:flex-row gap-6 md:gap-10">
 
           {/* Avatar (Glass Container) */}
@@ -326,7 +326,7 @@ export default function ProfilePage() {
                          animate={{ opacity: 1, y: 0 }}
                          transition={{ duration: 0.3, delay: index * 0.05 }}
                        >
-                         <Link href={`/lists/${list.id}`} className="block">
+                         <Link href={`/list-view?id=${list.id}`} className="block">
                              <StackCard 
                                  images={list.albums?.map((a: any) => a.image?.replace('100x100', '300x300')) || []}
                                  title={list.title}
@@ -372,7 +372,7 @@ export default function ProfilePage() {
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                       className="relative flex gap-4 md:gap-5 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10 group hover:bg-white/10 hover:border-white/20 transition duration-300"
                     >
-                        <Link href={`/album/${review.album_id}`} className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-lg border border-white/10">
+                        <Link href={`/album-view?id=${review.album_id}`} className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-lg border border-white/10">
                             <img src={review.album_image} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
                         </Link>
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -429,7 +429,7 @@ export default function ProfilePage() {
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ duration: 0.3, delay: index * 0.03 }}
                         >
-                          <Link href={`/album/${like.album_id}`} className="group block">
+                          <Link href={`/album-view?id=${like.album_id}`} className="group block">
                               <div className="relative mb-3 flex justify-center">
                                   {/* Composant Vinyl pour les albums likés */}
                                   <Vinyl imageUrl={like.album_image?.replace('100x100', '400x400')} size="w-full aspect-square" />
@@ -519,7 +519,7 @@ export default function ProfilePage() {
                     {(showFollowModal === 'followers' ? followersList : followingList).map((user: any) => (
                         <Link
                           key={user.id}
-                          href={`/user/${user.username}`}
+                          href={`/profile-view?u=${user.username}`}
                           onClick={() => setShowFollowModal(null)}
                           className="flex items-center gap-4 p-3 hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/10 transition group"
                         >

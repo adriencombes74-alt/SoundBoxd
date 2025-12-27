@@ -118,7 +118,7 @@ export default function CommunityPage() {
           )}
 
           {results.map((profile) => (
-            <Link key={profile.id} href={`/user/${profile.username}`} className="group block">
+            <Link key={profile.id} href={`/profile-view?u=${profile.username}`} className="group block">
                 <div className="flex items-center justify-between bg-[#121212] p-6 rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
                     <div className="flex items-center gap-5">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-2xl font-black text-black overflow-hidden border-2 border-[#14181c] shadow-lg group-hover:scale-110 transition duration-300">

@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
 
-export default function ArtistClientPage({ params }: { params: any }) {
+export default function ArtistClientPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+  
   const [artistId, setArtistId] = useState<string>("");
   const [artistInfo, setArtistInfo] = useState<any>(null);
   const [albums, setAlbums] = useState<any[]>([]);
@@ -15,14 +18,11 @@ export default function ArtistClientPage({ params }: { params: any }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
-  // Déballage des paramètres (Next.js 15)
   useEffect(() => {
-    if (params instanceof Promise) {
-      params.then((p: any) => setArtistId(p.id));
-    } else {
-      setArtistId(params.id);
+    if (id) {
+        setArtistId(id);
     }
-  }, [params]);
+  }, [id]);
 
   useEffect(() => {
     checkUser();
@@ -155,7 +155,7 @@ export default function ArtistClientPage({ params }: { params: any }) {
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {albums.map((album) => (
-                    <Link key={album.collectionId} href={`/album/${album.collectionId}`} className="group block">
+                    <Link key={album.collectionId} href={`/album-view?id=${album.collectionId}`} className="group block">
                         <div className="relative aspect-square mb-4 overflow-hidden rounded-2xl bg-[#121212] shadow-lg border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300">
                             <img 
                                 src={album.artworkUrl100.replace('100x100', '400x400')} 
@@ -182,3 +182,4 @@ export default function ArtistClientPage({ params }: { params: any }) {
     </div>
   );
 }
+

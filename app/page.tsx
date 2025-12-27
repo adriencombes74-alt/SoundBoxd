@@ -193,7 +193,7 @@ export default function Home() {
     
     return (
       <div className="group relative bg-[#121212] rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col h-full">
-          <Link href={`/album/${review.album_id}`} className="relative aspect-square overflow-hidden rounded-t-2xl">
+          <Link href={`/album-view?id=${review.album_id}`} className="relative aspect-square overflow-hidden rounded-t-2xl">
               <img 
                   src={review.album_image?.replace('100x100', '400x400')} 
                   className="w-full h-full object-cover transition duration-700 group-hover:scale-110" 
@@ -224,7 +224,7 @@ export default function Home() {
               
               {/* Footer avec utilisateur et actions */}
               <div className="mt-auto flex justify-between items-center pt-2">
-                  <Link href={`/user/${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition">
+                  <Link href={`/profile-view?u=${review.user_name}`} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition">
                       <div className="w-5 h-5 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-[8px] text-white">
                           {review.user_name?.[0]?.toUpperCase()}
                       </div>
@@ -255,28 +255,28 @@ export default function Home() {
 
   // Carte Album / Musique pour les Tops
   const TopItemCard = ({ item, rank, type }: { item: any, rank: number, type: 'album' | 'song' }) => (
-    <Link href={`/album/${item.albumId || item.id}`} className="group relative block animate-in fade-in zoom-in duration-500">
+    <Link href={`/album-view?id=${item.albumId || item.id}`} className="group relative block animate-in fade-in zoom-in duration-500">
         <div className="relative aspect-[2/3] overflow-hidden rounded-2xl shadow-lg bg-[#121212] mb-3 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-2">
             <img 
                 src={item.image?.replace('100x100', '600x600')} 
                 alt={item.name} 
                 className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500 group-hover:scale-110"
             />
-            <div className="absolute top-2 left-2 w-8 h-8 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
+            <div className="absolute top-2 left-2 w-8 h-8 bg-[#37C1BE] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
                 #{rank}
             </div>
             {type === 'song' && (
-                <div className="absolute top-2 right-2 bg-black/80 text-[#00e054] text-[10px] px-2 py-1 rounded-full font-bold shadow-lg backdrop-blur-sm">
+                <div className="absolute top-2 right-2 bg-black/80 text-[#37C1BE] text-[10px] px-2 py-1 rounded-full font-bold shadow-lg backdrop-blur-sm">
                     ♫
                 </div>
             )}
             <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 to-transparent pt-10">
-                <div className="flex items-center gap-1 text-[#00e054] font-bold text-lg">
+                <div className="flex items-center gap-1 text-[#37C1BE] font-bold text-lg">
                     <span>★</span> {item.average.toFixed(1)}
                 </div>
             </div>
         </div>
-        <h3 className="font-bold text-white truncate group-hover:text-[#00e054] transition">{item.name}</h3>
+        <h3 className="font-bold text-white truncate group-hover:text-[#37C1BE] transition">{item.name}</h3>
         <p className="text-xs text-gray-500 truncate">{item.artist}</p>
     </Link>
   );
@@ -287,7 +287,7 @@ export default function Home() {
       <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
       <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300
     bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150
     border border-white/10 border-t-white/20
@@ -296,7 +296,7 @@ export default function Home() {
             <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
-            <div className="flex items-center gap-3 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
+            <div className="hidden md:flex items-center gap-3 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
                 <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
                     <span className="text-base md:text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
                 </Link>
@@ -314,9 +314,9 @@ export default function Home() {
       </div>
 
       {/* HERO */}
-      <header className="relative pt-32 md:pt-40 pb-8 md:pb-10 px-4 md:px-6 flex flex-col items-center text-center z-10">
+      <header className="relative pt-12 md:pt-40 pb-8 md:pb-10 px-4 md:px-6 flex flex-col items-center text-center z-10">
         <h1 className="text-3xl md:text-5xl lg:text-8xl font-black tracking-tight mb-4 md:mb-6 leading-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
-          <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden"/><span className="text-[#00e054]">MUSIQUE.</span>
+          <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden"/><span className="text-[#37C1BE]">MUSIQUE.</span>
         </h1>
 
         <p className="text-base md:text-lg text-gray-400 max-w-sm md:max-w-xl mb-6 md:mb-8 font-light px-2">
@@ -344,7 +344,7 @@ export default function Home() {
                     <Link
                         key={genre}
                         href={`/search?q=${genre}&type=album`}
-                        className="px-8 md:px-1 py-1 md:py-1 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-110 hover:shadow-lg hover:bg-[#202020]"
+                        className="flex-shrink-0 whitespace-nowrap px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-105 hover:shadow-lg hover:bg-[#202020]"
                     >
                         {genre}
                     </Link>
@@ -355,7 +355,7 @@ export default function Home() {
         {/* 2. TOP RATED ALBUMS */}
         <section>
             <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-6 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0">🏆 Top Albums</h2>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0"> Top Albums</h2>
                 <span className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
             </div>
             {topAlbums.length > 0 ? (
@@ -381,7 +381,7 @@ export default function Home() {
         {/* 3. TOP RATED SONGS (NOUVEAU) */}
         <section>
             <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-6 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0">🎵 Top Titres</h2>
+                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2 md:mb-0"> Top Titres</h2>
                 <span className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Les Mieux Notés</span>
             </div>
             {topSongs.length > 0 ? (
@@ -531,12 +531,12 @@ export default function Home() {
                           }}
                           layout
                         >
-                            <Link href={`/user/${c.profiles?.username}`} className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/[0.06] backdrop-blur-xl flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/15 shadow-lg shadow-black/10 text-gray-400 hover:border-[#00e054] transition-all">
+                            <Link href={`/profile-view?u=${c.profiles?.username}`} className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-white/[0.06] backdrop-blur-xl flex-shrink-0 overflow-hidden text-[8px] md:text-[10px] flex items-center justify-center font-bold border border-white/15 shadow-lg shadow-black/10 text-gray-400 hover:border-[#00e054] transition-all">
                                 {c.profiles?.avatar_url ? <img src={c.profiles.avatar_url} alt="avatar" className="w-full h-full object-cover"/> : c.profiles?.username?.[0]?.toUpperCase()}
                             </Link>
                             <div className="flex-1">
                                 <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-2xl px-3 py-2 md:px-4 md:py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300">
-                                    <Link href={`/user/${c.profiles?.username}`} className="text-[10px] md:text-xs font-bold text-white mb-1 block hover:text-[#00e054] transition">{c.profiles?.username}</Link>
+                                    <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-[10px] md:text-xs font-bold text-white mb-1 block hover:text-[#00e054] transition">{c.profiles?.username}</Link>
                                     <div className="text-[10px] md:text-xs text-gray-300 leading-relaxed">{c.content}</div>
                                     <div className="text-[8px] md:text-[10px] text-gray-500 mt-1">
                                       {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}

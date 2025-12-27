@@ -33,6 +33,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import BottomNav from "@/components/ui/bottom-nav";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -49,6 +51,8 @@ export default function RootLayout({
             <div className="flex-1">
               {children}
             </div>
+
+            <BottomNav />
 
             {/* FOOTER GLOBAL */}
             <footer className="border-t border-white/10 bg-[#0a0a0a] mt-20 pb-10">

@@ -66,11 +66,29 @@ function SearchContent() {
 
   // États Exploration
   const [popularItems, setPopularItems] = useState<any[]>([]);
-  const [recentItems, setRecentItems] = useState<any[]>([]);
   const [loadingExplore, setLoadingExplore] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
 
   const genres = ["Pop", "Hip-Hop", "Rock", "Alternative", "Indie", "Electronic", "Jazz", "R&B", "Metal", "Classical", "Reggae"];
+
+  const performSearch = async (searchQuery: string, type: string) => {
+    setLoading(true);
+    setResults([]);
+    setHasSearched(true);
+
+    try {
+      let entity = 'album';
+      if (type === 'artist') entity = 'musicArtist';
+      if (type === 'song') entity = 'song';
+
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=${entity}&limit=24`);
+      const data = await res.json();
+      setResults(data.results);
+    } catch (error) {
+      console.error("Erreur de recherche:", error);
+    }
+    setLoading(false);
+  };
 
   // Chargement des données Explore
   useEffect(() => {
@@ -96,8 +114,6 @@ function SearchContent() {
         const uniquePopularItems = Array.from(uniqueAlbums.values()).slice(0, 5);
         setPopularItems(uniquePopularItems);
         
-        const { data: rec } = await supabase.from('reviews').select('*').order('created_at', { ascending: false }).limit(6);
-        setRecentItems(rec || []);
         setLoadingExplore(false);
     };
     loadExplore();
@@ -115,25 +131,6 @@ function SearchContent() {
         setHasSearched(true);
     }
   }, [searchParams]);
-
-  const performSearch = async (searchQuery: string, type: string) => {
-    setLoading(true);
-    setResults([]);
-    setHasSearched(true);
-
-    try {
-      let entity = 'album';
-      if (type === 'artist') entity = 'musicArtist';
-      if (type === 'song') entity = 'song';
-
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=${entity}&limit=24`);
-      const data = await res.json();
-      setResults(data.results);
-    } catch (error) {
-      console.error("Erreur de recherche:", error);
-    }
-    setLoading(false);
-  };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +187,7 @@ function SearchContent() {
 
       {/* NAVBAR */}
       <motion.div 
-        className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4"
+        className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.1 }}
@@ -199,7 +196,7 @@ function SearchContent() {
             <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
                 Music<span className="text-[#00e054]">Boxd</span>
             </Link>
-            <div className="flex items-center gap-2 md:gap-4 text-[10px] md:text-xs font-bold uppercase tracking-widest">
+            <div className="hidden md:flex items-center gap-2 md:gap-4 text-[10px] md:text-xs font-bold uppercase tracking-widest">
                 <AnimatePresence>
                 {hasSearched && (
                     <motion.button 
@@ -227,7 +224,7 @@ function SearchContent() {
         </nav>
       </motion.div>
 
-      <main className="relative z-10 pt-40 px-6 max-w-7xl mx-auto">
+      <main className="relative z-10 pt-16 md:pt-40 px-6 max-w-7xl mx-auto">
         
         {/* BARRE DE RECHERCHE */}
         <motion.div 
@@ -293,7 +290,7 @@ function SearchContent() {
                         Parcourir par Genre
                     </h2>
                     <motion.div 
-                      className="flex flex-wrap gap-3"
+                      className="flex flex-wrap gap-3 items-center"
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
@@ -302,7 +299,7 @@ function SearchContent() {
                             <motion.button 
                                 key={genre}
                                 onClick={() => handleGenreClick(genre)}
-                                className="px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-sm font-bold transition-all hover:shadow-lg hover:shadow-[#00e054]/10 hover:bg-[#202020]"
+                                className="px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-sm font-bold transition-all hover:shadow-lg hover:shadow-[#00e054]/10 hover:bg-[#202020] whitespace-nowrap"
                                 variants={itemVariants}
                                 whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
@@ -352,7 +349,7 @@ function SearchContent() {
                                   variants={itemVariants}
                                   className="relative"
                                 >
-                                  <Link href={`/album/${item.album_id}`} className="group block">
+                                  <Link href={`/album-view?id=${item.album_id}`} className="group block">
                                     <motion.div 
                                       className="relative aspect-square overflow-hidden rounded-2xl shadow-lg bg-[#121212] mb-3 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300"
                                       whileHover={{ y: -8, scale: 1.02 }}
@@ -439,7 +436,7 @@ function SearchContent() {
                             if (searchType === 'artist') {
                                 return (
                                     <motion.div key={item.artistId} variants={itemVariants}>
-                                      <Link href={`/artist/${item.artistId}`} className="group block">
+                                      <Link href={`/artist-view?id=${item.artistId}`} className="group block">
                                         <motion.div 
                                           className="bg-[#121212] hover:bg-[#1a1a1a] p-8 rounded-3xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 flex flex-col items-center text-center h-full shadow-lg"
                                           whileHover={{ y: -8, scale: 1.02 }}
@@ -462,7 +459,7 @@ function SearchContent() {
                             const isSong = searchType === 'song';
                             return (
                                 <motion.div key={item.trackId || item.collectionId} variants={itemVariants}>
-                                  <Link href={`/album/${targetId}`} className="group cursor-pointer block">
+                                  <Link href={`/album-view?id=${targetId}`} className="group cursor-pointer block">
                                     <motion.div 
                                       className="relative aspect-square overflow-hidden rounded-3xl shadow-2xl bg-[#121212] mb-4 border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300"
                                       whileHover={{ y: -8, scale: 1.02 }}

@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProfileMenu from '@/components/ui/profile-menu';
 
-export default function ListDetailsClientPage({ params }: { params: any }) {
+export default function ListDetailsClientPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+
   const [listId, setListId] = useState<string>("");
   const [list, setList] = useState<any>(null);
   const [owner, setOwner] = useState<any>(null);
@@ -15,12 +18,10 @@ export default function ListDetailsClientPage({ params }: { params: any }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (params instanceof Promise) {
-      params.then((p: any) => setListId(p.id));
-    } else {
-      setListId(params.id);
+    if (id) {
+        setListId(id);
     }
-  }, [params]);
+  }, [id]);
 
   const fetchListData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -197,7 +198,7 @@ export default function ListDetailsClientPage({ params }: { params: any }) {
         <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-hide">
             {list.albums?.map((item: any, index: number) => (
                 // Lien intelligent : targetId (AlbumID) ou id (pour compatibilité)
-                <Link key={index} href={`/album/${item.targetId || item.id}`} className="block group">
+                <Link key={index} href={`/album-view?id=${item.targetId || item.id}`} className="block group">
                     <div className="flex items-center gap-3 md:gap-6 p-3 md:p-4 rounded-2xl bg-white/10 backdrop-blur-lg border border-white/10 hover:border-[#00e054]/50 hover:bg-white/20 transition-all duration-300 hover:translate-x-1 shadow-lg min-w-[220px]">
                         <div className="text-gray-600 font-mono text-base md:text-xl w-8 text-center font-bold group-hover:text-[#00e054] transition">{index + 1}</div>
                         <div className="w-14 h-14 md:w-20 md:h-20 flex-shrink-0 shadow-2xl group-hover:scale-105 transition transform duration-500 relative">

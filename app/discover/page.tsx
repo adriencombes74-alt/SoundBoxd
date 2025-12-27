@@ -316,7 +316,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
   const infoContent = review.review_text ? (
     <>
       <div className="flex items-center gap-3 mb-3">
-        <Link href={`/user/${review.profiles.username}`} className="flex items-center gap-3 group">
+        <Link href={`/profile-view?u=${review.profiles.username}`} className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg font-bold text-black overflow-hidden">
             {review.profiles.avatar_url ? (
               <img src={review.profiles.avatar_url} alt={`Avatar de ${review.profiles.username}`} className="w-full h-full object-cover" />
@@ -351,7 +351,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
     </>
   ) : (
     <div className="text-center">
-      <Link href={`/album/${review.album_id}`} className="block group">
+      <Link href={`/album-view?id=${review.album_id}`} className="block group">
         <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-[#00e054] transition mb-2">
           {review.album_name}
         </h3>
@@ -381,7 +381,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
       </div>
 
       {/* CONTENU PRINCIPAL */}
-      <div className="relative z-10 flex items-center justify-center w-full h-full px-6">
+      <div className="relative z-10 flex items-center justify-center w-full h-full px-6 pb-32 md:pb-0">
 
         {/* CENTRAGE : DISQUE VINYLE QUI TOURNE */}
         <div className="flex flex-col items-center justify-center space-y-8">
@@ -410,14 +410,14 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         </div>
 
         {/* OVERLAY BAS : INFOS DE LA CRITIQUE */}
-        <div className="absolute bottom-8 left-6 right-6">
+        <div className="absolute bottom-28 md:bottom-8 left-6 right-6">
           <div className="bg-white/[0.03] backdrop-blur-3xl backdrop-saturate-150 rounded-3xl p-4 md:p-6 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
             {infoContent}
           </div>
         </div>
 
         {/* ACTIONS DROITE (Style Instagram Reels) */}
-        <div className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 md:gap-5">
+        <div className="absolute right-4 md:right-6 top-[42%] md:top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 md:gap-5">
           <button
             onClick={handleLike}
             className={`p-3 md:p-4 rounded-full border-2 transition-all backdrop-blur-xl shadow-lg ${
@@ -447,7 +447,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
           </button>
 
           <Link
-            href={`/album/${review.album_id}`}
+            href={`/album-view?id=${review.album_id}`}
             className="p-3 md:p-4 rounded-full border-2 bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60 transition-all backdrop-blur-xl shadow-lg"
             title="Voir l'album"
           >
@@ -519,7 +519,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
                   }}
                   layout
                 >
-                  <Link href={`/user/${c.profiles?.username}`} className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400 hover:border-[#00e054] transition-all">
+                  <Link href={`/profile-view?u=${c.profiles?.username}`} className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400 hover:border-[#00e054] transition-all">
                     {c.profiles?.avatar_url ? (
                       <img src={c.profiles.avatar_url} alt={c.profiles.username} className="w-full h-full object-cover"/>
                     ) : (
@@ -527,7 +527,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
                     )}
                   </Link>
                   <div className="flex-1">
-                    <Link href={`/user/${c.profiles?.username}`} className="text-xs font-bold text-[#00e054] block mb-1 hover:text-[#00c04b] transition">{c.profiles?.username}</Link>
+                    <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-xs font-bold text-[#00e054] block mb-1 hover:text-[#00c04b] transition">{c.profiles?.username}</Link>
                     <p className="text-sm text-gray-300 leading-relaxed">{c.content}</p>
                     <span className="text-xs text-gray-500 mt-1 block">
                       {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -1178,11 +1178,11 @@ export default function DiscoverPage() {
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR FLOTTANTE */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
         <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
             <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
             
-            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+            <div className="hidden md:flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
                 <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
                 <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
                     <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
@@ -1213,7 +1213,7 @@ export default function DiscoverPage() {
       </div>
 
       {/* ONGLETS AMIS/DÉCOUVRIR */}
-      <div className="fixed top-20 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
+      <div className="fixed top-6 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
@@ -1241,7 +1241,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-32 md:pt-36"
+        className="h-screen overflow-y-auto snap-y snap-mandatory pt-0 md:pt-36"
       >
         {currentReviews.length > 0 ? (
           <>

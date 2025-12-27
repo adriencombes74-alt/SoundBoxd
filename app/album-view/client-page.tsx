@@ -2,14 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProfileMenu from '@/components/ui/profile-menu';
 import ListenMenu from '@/components/ui/listen-menu';
+import { Toast, ToastType } from '@/components/ui/toast';
+import { Heart, ListPlus, Check } from 'lucide-react';
 
-export default function AlbumClientPage({ params }: { params: any }) {
+export default function AlbumClientPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+  
   const [albumId, setAlbumId] = useState<string | null>(null);
   const [album, setAlbum] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
@@ -33,13 +38,136 @@ export default function AlbumClientPage({ params }: { params: any }) {
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
+  // Spotify Integration
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [toast, setToast] = useState<{ msg: string, type: ToastType, visible: boolean }>({ msg: '', type: 'info', visible: false });
+
+  // Playlists
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedTrackForPlaylist, setSelectedTrackForPlaylist] = useState<any>(null);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
+
+  const showToast = (msg: string, type: ToastType = 'info') => {
+    setToast({ msg, type, visible: true });
+  };
+
   useEffect(() => {
-    if (params instanceof Promise) {
-      params.then((unwrappedParams: any) => setAlbumId(unwrappedParams.id));
-    } else {
-      setAlbumId(params.id);
+    const checkSpotify = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data } = await supabase.from('user_integrations').select('id').eq('user_id', user.id).eq('provider', 'spotify').single();
+            if (data) setSpotifyConnected(true);
+        }
+    };
+    checkSpotify();
+  }, []);
+
+  const handleSpotifyLike = async (track: any) => {
+    if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
+    if (!spotifyConnected) {
+        if(confirm("Liez votre compte Spotify pour sauvegarder des titres. Aller aux réglages ?")) {
+            router.push('/settings/connections');
+        }
+        return;
     }
-  }, [params]);
+
+    try {
+        const res = await fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                action: 'like',
+                query: `${track.trackName} ${track.artistName}` 
+            })
+        });
+
+        if (res.ok) {
+            showToast(`"${track.trackName}" liké sur Spotify !`, "success");
+        } else {
+            const err = await res.json();
+            console.error(err);
+            showToast("Erreur lors de l'ajout sur Spotify.", "error");
+        }
+    } catch (error) {
+        console.error(error);
+        showToast("Erreur de connexion.", "error");
+    }
+  };
+
+  const fetchPlaylists = async () => {
+      setLoadingPlaylists(true);
+      try {
+          const res = await fetch('/api/spotify/actions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  userId: currentUser.id,
+                  action: 'getPlaylists'
+              })
+          });
+          const data = await res.json();
+          if (data.success) {
+              setPlaylists(data.playlists);
+          } else {
+              showToast("Impossible de charger les playlists", "error");
+          }
+      } catch (error) {
+          console.error(error);
+          showToast("Erreur lors du chargement des playlists", "error");
+      }
+      setLoadingPlaylists(false);
+  };
+
+  const openPlaylistModal = async (track: any) => {
+    if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
+    if (!spotifyConnected) {
+        if(confirm("Liez votre compte Spotify pour gérer vos playlists. Aller aux réglages ?")) {
+            router.push('/settings/connections');
+        }
+        return;
+    }
+    
+    setSelectedTrackForPlaylist(track);
+    setShowPlaylistModal(true);
+    if (playlists.length === 0) {
+        await fetchPlaylists();
+    }
+  };
+
+  const handleAddToPlaylist = async (playlistId: string) => {
+      if (!selectedTrackForPlaylist) return;
+
+      try {
+        const res = await fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                action: 'addToPlaylist',
+                playlistId,
+                query: `${selectedTrackForPlaylist.trackName} ${selectedTrackForPlaylist.artistName}`
+            })
+        });
+
+        if (res.ok) {
+            showToast("Ajouté à la playlist !", "success");
+            setShowPlaylistModal(false);
+        } else {
+            showToast("Erreur lors de l'ajout", "error");
+        }
+    } catch (error) {
+        console.error(error);
+        showToast("Erreur de connexion", "error");
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      setAlbumId(id);
+    }
+  }, [id]);
 
   useEffect(() => {
     if (albumId) {
@@ -234,6 +362,13 @@ export default function AlbumClientPage({ params }: { params: any }) {
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
       
+      <Toast 
+        message={toast.msg} 
+        type={toast.type} 
+        isVisible={toast.visible} 
+        onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
+      />
+
       {/* GLOWS */}
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
       <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
@@ -332,7 +467,7 @@ export default function AlbumClientPage({ params }: { params: any }) {
                                         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-[10px] font-bold text-white border border-white/10 overflow-hidden">
                                             {review.profiles?.avatar_url ? <img src={review.profiles.avatar_url} className="w-full h-full object-cover rounded-full" /> : (review.user_name?.[0] || '?')}
                                         </div>
-                                        <Link href={`/user/${review.user_name}`} className="font-bold text-xs text-gray-300 hover:text-white transition">{review.user_name}</Link>
+                                        <Link href={`/profile-view?u=${review.user_name}`} className="font-bold text-xs text-gray-300 hover:text-white transition">{review.user_name}</Link>
                                     </div>
                                     <div className="text-[#00e054] text-xs tracking-widest">{"★".repeat(review.rating)}</div>
                                 </div>
@@ -389,13 +524,35 @@ export default function AlbumClientPage({ params }: { params: any }) {
                             </div>
 
                             <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+                                {/* SPOTIFY ACTIONS */}
+                                <div className="flex gap-1 md:gap-2 mr-2 border-r border-white/10 pr-2 md:pr-4">
+                                  <motion.button 
+                                      onClick={() => handleSpotifyLike(track)} 
+                                      className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-[#00e054] hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all" 
+                                      title="Liker sur Spotify"
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.95 }}
+                                  >
+                                      <Heart className="w-4 h-4" />
+                                  </motion.button>
+                                  <motion.button 
+                                      onClick={() => openPlaylistModal(track)} 
+                                      className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all" 
+                                      title="Ajouter à une playlist"
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.95 }}
+                                  >
+                                      <ListPlus className="w-4 h-4" />
+                                  </motion.button>
+                                </div>
+
                                 {trackAvg && (
                                     <div className="flex items-center gap-0.5 md:gap-1 text-xs md:text-sm font-black text-[#00e054] bg-[#00e054]/10 px-1.5 md:px-3 py-0.5 md:py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
                                         <span className="text-[10px] md:text-xs opacity-70">★</span> {trackAvg}
                                     </div>
                                 )}
 
-                                {/* BOUTON PLAY/PAUSE - Design moderne */}
+                                {/* BOUTON PLAY/PAUSE */}
                                 <motion.button
                                     onClick={() => handlePlayTrack(track)}
                                     className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
@@ -426,7 +583,7 @@ export default function AlbumClientPage({ params }: { params: any }) {
                                     )}
                                 </motion.button>
 
-                                {/* BOUTON NOTER - Design moderne */}
+                                {/* BOUTON NOTER */}
                                 <motion.button 
                                     onClick={() => openRatingModal(track)} 
                                     className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 text-amber-400 hover:bg-amber-500 hover:text-black flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]" 
@@ -450,7 +607,7 @@ export default function AlbumClientPage({ params }: { params: any }) {
 
       </main>
 
-      {/* MODALE DE NOTATION - ANIMATION APP NATIVE */}
+      {/* MODALE DE NOTATION */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div 
@@ -460,7 +617,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {/* Backdrop avec blur */}
             <motion.div 
               className="absolute inset-0 bg-black/60 backdrop-blur-xl"
               initial={{ opacity: 0 }}
@@ -469,7 +625,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
               onClick={() => setIsModalOpen(false)}
             />
             
-            {/* Contenu de la modale */}
             <motion.div 
               className="relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] p-6 md:p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/50 overflow-hidden"
               initial={{ opacity: 0, scale: 0.9, y: 50 }}
@@ -477,10 +632,8 @@ export default function AlbumClientPage({ params }: { params: any }) {
               exit={{ opacity: 0, scale: 0.9, y: 50 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
-              {/* Glow effect derrière */}
               <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#00e054]/20 rounded-full blur-3xl pointer-events-none" />
               
-              {/* Header */}
               <div className="flex justify-between items-center mb-4 relative z-10">
                 <motion.h2 
                   className="text-xl md:text-2xl font-black text-white"
@@ -500,7 +653,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
                 </motion.button>
               </div>
               
-              {/* Nom du titre si c'est une piste */}
               {ratingTarget !== 'album' && (
                 <motion.p 
                   className="text-[#00e054] text-sm font-bold mb-6 uppercase tracking-wide border-l-2 border-[#00e054] pl-3"
@@ -512,7 +664,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
                 </motion.p>
               )}
 
-              {/* Étoiles avec animation */}
               <motion.div 
                 className="flex justify-center mb-6 gap-1 md:gap-2 bg-white/[0.03] backdrop-blur-lg p-4 md:p-5 rounded-2xl border border-white/5"
                 initial={{ opacity: 0, y: 20 }}
@@ -549,7 +700,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
                 ))}
               </motion.div>
               
-              {/* Indicateur de note */}
               <AnimatePresence>
                 {userRating > 0 && (
                   <motion.div 
@@ -570,7 +720,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
                 )}
               </AnimatePresence>
 
-              {/* Textarea */}
               <motion.textarea
                 className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white focus:border-[#00e054]/40 focus:bg-black/40 focus:outline-none mb-6 h-28 resize-none text-sm placeholder-gray-600 transition-all duration-300"
                 placeholder="Votre avis (optionnel)..."
@@ -581,7 +730,6 @@ export default function AlbumClientPage({ params }: { params: any }) {
                 transition={{ delay: 0.3 }}
               />
 
-              {/* Boutons */}
               <motion.div 
                 className="flex gap-3"
                 initial={{ opacity: 0, y: 20 }}
@@ -620,6 +768,60 @@ export default function AlbumClientPage({ params }: { params: any }) {
               </motion.div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODALE PLAYLIST */}
+      <AnimatePresence>
+        {showPlaylistModal && (
+            <motion.div 
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={() => setShowPlaylistModal(false)} />
+              <motion.div 
+                className="relative bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                    <h3 className="font-bold text-white">Ajouter à une playlist</h3>
+                    <button onClick={() => setShowPlaylistModal(false)} className="text-gray-400 hover:text-white">✕</button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2">
+                    {loadingPlaylists ? (
+                        <div className="text-center py-8 text-gray-500">Chargement...</div>
+                    ) : (
+                        <div className="space-y-1">
+                            {playlists.map(playlist => (
+                                <button
+                                    key={playlist.id}
+                                    onClick={() => handleAddToPlaylist(playlist.id)}
+                                    className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition text-left group"
+                                >
+                                    {playlist.images?.[0]?.url ? (
+                                        <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" />
+                                    ) : (
+                                        <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">{playlist.name}</div>
+                                        <div className="text-xs text-gray-500">{playlist.tracks?.total || 0} titres</div>
+                                    </div>
+                                    <div className="opacity-0 group-hover:opacity-100 text-[#00e054]">
+                                        <Check className="w-5 h-5" />
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+              </motion.div>
+            </motion.div>
         )}
       </AnimatePresence>
     </div>

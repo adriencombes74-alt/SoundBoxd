@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProfileMenu from '@/components/ui/profile-menu';
@@ -9,8 +10,11 @@ import Vinyl from '@/components/Vinyl';
 import TiltCard from '@/components/ui/tilt-card';
 import StackCard from '@/components/ui/stack-card';
 
-export default function UserProfileClientPage({ params }: { params: any }) {
-  const [username, setUsername] = useState<string>("");
+export default function UserProfileClientPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const username = searchParams.get('u') || ""; // Récupère ?u=username
+
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   
@@ -24,15 +28,6 @@ export default function UserProfileClientPage({ params }: { params: any }) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'reviews' | 'lists' | 'likes'>('reviews');
-
-  // Gestion Next.js 15
-  useEffect(() => {
-    if (params instanceof Promise) {
-      params.then((p: any) => setUsername(decodeURIComponent(p.username)));
-    } else {
-      setUsername(decodeURIComponent(params.username));
-    }
-  }, [params]);
 
   useEffect(() => {
     if (username) fetchData();
@@ -351,7 +346,7 @@ export default function UserProfileClientPage({ params }: { params: any }) {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: 0.3, delay: index * 0.05 }}
                             >
-                              <Link href={`/lists/${list.id}`} className="block">
+                              <Link href={`/list-view?id=${list.id}`} className="block">
                                   <StackCard 
                                       images={list.albums?.map((a: any) => a.image?.replace('100x100', '300x300')) || []}
                                       title={list.title}
@@ -397,7 +392,7 @@ export default function UserProfileClientPage({ params }: { params: any }) {
                           transition={{ duration: 0.3, delay: index * 0.05 }}
                           className="relative flex gap-4 md:gap-5 bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10 group hover:bg-white/10 hover:border-white/20 transition duration-300"
                         >
-                            <Link href={`/album/${review.album_id}`} className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-lg border border-white/10">
+                            <Link href={`/album-view?id=${review.album_id}`} className="flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shadow-lg border border-white/10">
                                 <img src={review.album_image} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
                             </Link>
                             <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -452,7 +447,7 @@ export default function UserProfileClientPage({ params }: { params: any }) {
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ duration: 0.3, delay: index * 0.03 }}
                         >
-                          <Link href={`/album/${like.album_id}`} className="group block">
+                          <Link href={`/album-view?id=${like.album_id}`} className="group block">
                               <div className="relative mb-3 flex justify-center">
                                   {/* Composant Vinyl pour les albums likés */}
                                   <Vinyl imageUrl={like.album_image?.replace('100x100', '400x400')} size="w-full aspect-square" />
@@ -486,3 +481,4 @@ export default function UserProfileClientPage({ params }: { params: any }) {
     </div>
   );
 }
+
