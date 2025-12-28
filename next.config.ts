@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     unoptimized: true, 
   },
   // Ensure paths work correctly on static export
-  trailingSlash: true,
+  trailingSlash: false,
 };
 
 export default nextConfig;
