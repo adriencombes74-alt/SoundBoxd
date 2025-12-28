@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-// L'import Supabase est SUPPRIMÉ pour isoler le crash
-// import { createClient } from '@supabase/supabase-js'; 
+import { createClient } from '@supabase/supabase-js';
+// PAS D'IMPORT DE COOKIES !
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  console.log("🚀 Callback started");
+  console.log("🚀 Callback started (No Cookies Mode)");
   
   try {
     const { searchParams } = new URL(request.url);
@@ -14,12 +13,9 @@ export async function GET(request: Request) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
-    // Récupérer l'origine pour la redirection
     const baseUrl = process.env.SPOTIFY_REDIRECT_URI 
       ? new URL(process.env.SPOTIFY_REDIRECT_URI).origin 
       : new URL(request.url).origin;
-
-    console.log("📍 Base URL:", baseUrl);
 
     if (error) {
       console.error("❌ Spotify error:", error);
@@ -31,17 +27,14 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${baseUrl}/settings/connections?error=missing_params`);
     }
 
-    console.log("🍪 Reading cookies...");
-    const cookieStore = await cookies();
-    const savedState = cookieStore.get('spotify_auth_state')?.value;
-    const userId = cookieStore.get('spotify_auth_user')?.value;
-
-    console.log("👤 User:", userId, "State:", state === savedState ? "OK" : "MISMATCH");
-
-    if (!savedState || state !== savedState || !userId) {
-      console.error("❌ Invalid state or user");
-      return NextResponse.redirect(`${baseUrl}/settings/connections?error=invalid_state`);
+    // Récupération du User ID depuis le State (Format: random:userId)
+    const parts = state.split(':');
+    if (parts.length < 2) {
+         console.error("❌ Invalid state format");
+         return NextResponse.redirect(`${baseUrl}/settings/connections?error=invalid_state`);
     }
+    const userId = parts[1]; // L'ID est après les deux points
+    console.log("👤 Extracted User ID:", userId);
 
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
@@ -53,8 +46,6 @@ export async function GET(request: Request) {
     }
 
     console.log("🔄 Exchanging token...");
-    
-    // Utilisation de btoa (standard Web) au lieu de Buffer (Node) pour éviter les soucis de runtime
     const basicAuth = btoa(`${clientId}:${clientSecret}`);
 
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
@@ -77,9 +68,9 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${baseUrl}/settings/connections?error=token_exchange_failed`);
     }
 
-    console.log("✅ Token received (Supabase disabled for test)");
+    console.log("✅ Token received");
 
-    /* PARTIE SUPABASE COMMENTÉE
+    // Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     
@@ -109,17 +100,12 @@ export async function GET(request: Request) {
       console.error('❌ Database Error:', dbError);
       return NextResponse.redirect(`${baseUrl}/settings/connections?error=database_error`);
     }
-    */
 
-    console.log("✨ Success! Cleaning up cookies.");
-    cookieStore.delete('spotify_auth_state');
-    cookieStore.delete('spotify_auth_user');
-
-    return NextResponse.redirect(`${baseUrl}/settings/connections?success=spotify_linked_TEST`);
+    console.log("✨ Success!");
+    return NextResponse.redirect(`${baseUrl}/settings/connections?success=spotify_linked`);
 
   } catch (err: any) {
     console.error("🔥 CRITICAL ERROR:", err);
-    // On essaie de rediriger même en cas de crash critique
     const baseUrl = process.env.SPOTIFY_REDIRECT_URI ? new URL(process.env.SPOTIFY_REDIRECT_URI).origin : "https://sound-boxd.vercel.app";
     return NextResponse.redirect(`${baseUrl}/settings/connections?error=server_error`);
   }
