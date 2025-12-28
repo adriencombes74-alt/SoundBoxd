@@ -27,6 +27,9 @@ export async function GET(request: Request) {
     state: state
   });
 
+  console.log("🚀 Login started");
+  console.log("📍 Redirect URI sent to Spotify:", redirectUri);
+
   const spotifyUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
 
   // Store state and userId in secure cookies
