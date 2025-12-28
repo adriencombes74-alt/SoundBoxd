@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-// import { createClient } from '@supabase/supabase-js'; // COMMENTÉ POUR TEST
+// L'import Supabase est SUPPRIMÉ pour isoler le crash
+// import { createClient } from '@supabase/supabase-js'; 
 
 export const dynamic = 'force-dynamic';
 
