@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+// import { createClient } from '@supabase/supabase-js'; // COMMENTÉ POUR TEST
 
-export const dynamic = 'force-dynamic'; // Force Vercel à ne pas mettre en cache statique
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   console.log("🚀 Callback started");
@@ -76,13 +76,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${baseUrl}/settings/connections?error=token_exchange_failed`);
     }
 
-    console.log("✅ Token received");
+    console.log("✅ Token received (Supabase disabled for test)");
 
-    // Supabase
+    /* PARTIE SUPABASE COMMENTÉE
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     
-    // Test simple de client sans requête pour voir si ça crashe
     console.log("🗄️ Init Supabase...");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -109,12 +108,13 @@ export async function GET(request: Request) {
       console.error('❌ Database Error:', dbError);
       return NextResponse.redirect(`${baseUrl}/settings/connections?error=database_error`);
     }
+    */
 
     console.log("✨ Success! Cleaning up cookies.");
     cookieStore.delete('spotify_auth_state');
     cookieStore.delete('spotify_auth_user');
 
-    return NextResponse.redirect(`${baseUrl}/settings/connections?success=spotify_linked`);
+    return NextResponse.redirect(`${baseUrl}/settings/connections?success=spotify_linked_TEST`);
 
   } catch (err: any) {
     console.error("🔥 CRITICAL ERROR:", err);
