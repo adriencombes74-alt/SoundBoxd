@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic'; // Force Vercel à ne pas mettre en cache statique
+
 export async function GET(request: Request) {
   console.log("🚀 Callback started");
   
