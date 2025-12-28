@@ -50,11 +50,15 @@ export async function GET(request: Request) {
     }
 
     console.log("🔄 Exchanging token...");
+    
+    // Utilisation de btoa (standard Web) au lieu de Buffer (Node) pour éviter les soucis de runtime
+    const basicAuth = btoa(`${clientId}:${clientSecret}`);
+
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64')
+        'Authorization': `Basic ${basicAuth}`
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
