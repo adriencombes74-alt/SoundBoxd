@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -16,7 +15,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Spotify configuration missing' }, { status: 500 });
   }
 
-  const state = crypto.randomUUID();
+  // On encode le userId DANS le state pour le récupérer au retour sans cookies
+  // Format simple : randomString:userId
+  const randomPart = crypto.randomUUID();
+  const state = `${randomPart}:${userId}`;
+  
   const scope = 'user-read-currently-playing user-library-modify playlist-modify-public';
 
   const params = new URLSearchParams({
@@ -27,30 +30,12 @@ export async function GET(request: Request) {
     state: state
   });
 
-  console.log("🚀 Login started");
-  console.log("📍 Redirect URI sent to Spotify:", redirectUri);
+  console.log("🚀 Login started (No Cookies Mode)");
+  console.log("📍 Redirect URI:", redirectUri);
+  console.log("🔑 State generated:", state);
 
   const spotifyUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
 
-  // Store state and userId in secure cookies
-  const cookieStore = await cookies();
-  
-  // State cookie for CSRF protection
-  cookieStore.set('spotify_auth_state', state, { 
-    httpOnly: true, 
-    secure: process.env.NODE_ENV === 'production', 
-    maxAge: 3600, 
-    path: '/' 
-  });
-  
-  // User ID cookie to know who to link the account to
-  cookieStore.set('spotify_auth_user', userId, { 
-    httpOnly: true, 
-    secure: process.env.NODE_ENV === 'production', 
-    maxAge: 3600, 
-    path: '/' 
-  });
-
+  // Plus de cookies !
   return NextResponse.redirect(spotifyUrl);
 }
-
