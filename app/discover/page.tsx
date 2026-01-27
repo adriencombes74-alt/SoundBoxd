@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
 import Vinyl from '@/components/Vinyl';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, MessageCircle, Eye, ListPlus, X } from 'lucide-react';
 
 interface Review {
   id: number;
@@ -55,8 +56,248 @@ interface DiscoverCardProps {
   } | null;
 }
 
+interface PlaylistSelectorProps {
+  userId: string;
+  track: Review;
+  onClose: () => void;
+}
+
+function PlaylistSelector({ userId, track, onClose }: PlaylistSelectorProps) {
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+
+  useEffect(() => {
+    const checkSpotify = async () => {
+      const { data } = await supabase
+        .from('user_integrations')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('provider', 'spotify')
+        .single();
+      if (data) setSpotifyConnected(true);
+    };
+    checkSpotify();
+  }, [userId]);
+
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      setLoading(true);
+
+      // 1. Fetch Supabase playlists
+      const { data: localData } = await supabase
+        .from('lists')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      setPlaylists(localData || []);
+
+      // 2. Fetch Spotify playlists if connected
+      if (spotifyConnected) {
+        try {
+          const res = await fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: userId,
+              action: 'getPlaylists'
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            setSpotifyPlaylists(data.playlists);
+          }
+        } catch (error) {
+          console.error("Erreur chargement playlists Spotify:", error);
+        }
+      }
+
+      setLoading(false);
+    };
+
+    if (userId) {
+      fetchPlaylists();
+    }
+  }, [userId, spotifyConnected]);
+
+  const addToPlaylist = async (playlist: any, isSpotify: boolean) => {
+    try {
+      if (isSpotify) {
+        // Ajout Spotify
+        const res = await fetch('/api/spotify/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            action: 'addToPlaylist',
+            playlistId: playlist.id,
+            query: `${track.album_name} ${track.artist_name}`
+          })
+        });
+
+        if (res.ok) {
+          alert(`Ajouté à la playlist Spotify "${playlist.name}" !`);
+          onClose();
+        } else {
+          throw new Error("Erreur API Spotify");
+        }
+      } else {
+        // Ajout Supabase (Interne)
+        const newTrack = {
+          id: track.album_id,
+          name: track.album_name,
+          artist: track.artist_name,
+          image: track.album_image,
+          type: 'song',
+          added_at: new Date().toISOString()
+        };
+
+        const currentTracks = Array.isArray(playlist.albums) ? playlist.albums : [];
+        const exists = currentTracks.some((t: any) => String(t.id) === String(newTrack.id));
+
+        if (exists) {
+          alert('Cette musique est déjà dans la playlist !');
+          return;
+        }
+
+        const updatedTracks = [...currentTracks, newTrack];
+
+        const { error } = await supabase
+          .from('lists')
+          .update({ albums: updatedTracks })
+          .eq('id', playlist.id);
+
+        if (error) throw error;
+
+        alert(`Ajouté à "${playlist.title}" !`);
+        onClose();
+      }
+    } catch (e) {
+      console.error('Erreur ajout playlist:', e);
+      alert("Erreur lors de l'ajout à la playlist.");
+    }
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-[#1a1a1a] w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex flex-col max-h-[70vh]"
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#1a1a1a] z-10">
+          <h3 className="text-xl font-bold text-white">Ajouter à une playlist</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-4 space-y-4">
+          {loading ? (
+            <div className="text-center py-8 text-gray-400">Chargement...</div>
+          ) : (
+            <>
+              {/* PLAYLISTS INTERNES */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">Mes Listes MusicBoxd</h4>
+                {playlists.length > 0 ? (
+                  <div className="space-y-2">
+                    {playlists.map(playlist => (
+                      <button
+                        key={playlist.id}
+                        onClick={() => addToPlaylist(playlist, false)}
+                        className="w-full flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition group text-left"
+                      >
+                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-800 to-black border border-white/10 flex items-center justify-center group-hover:border-[#00e054] transition-colors shrink-0">
+                          <ListPlus size={20} className="text-gray-400 group-hover:text-[#00e054]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-white group-hover:text-[#00e054] transition-colors truncate">
+                            {playlist.title}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {Array.isArray(playlist.albums) ? playlist.albums.length : 0} titres
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    Aucune liste. <Link href="/lists/create" className="text-[#00e054] hover:underline">Créer ?</Link>
+                  </div>
+                )}
+              </div>
+
+              {/* PLAYLISTS SPOTIFY */}
+              {spotifyConnected && (
+                <div>
+                  <h4 className="text-xs font-bold text-[#1DB954] uppercase tracking-widest mb-2 px-2 flex items-center gap-2">
+                    <span>Spotify</span>
+                    <span className="bg-[#1DB954] text-black text-[9px] px-1.5 py-0.5 rounded font-black">LIÉ</span>
+                  </h4>
+                  {spotifyPlaylists.length > 0 ? (
+                    <div className="space-y-2">
+                      {spotifyPlaylists.map(playlist => (
+                        <button
+                          key={playlist.id}
+                          onClick={() => addToPlaylist(playlist, true)}
+                          className="w-full flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#282828] border border-white/5 flex items-center justify-center shrink-0 overflow-hidden">
+                            {playlist.images?.[0]?.url ? (
+                              <img src={playlist.images[0].url} alt={playlist.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-xl">🎵</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-white group-hover:text-[#1DB954] transition-colors truncate">
+                              {playlist.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {playlist.tracks?.total || 0} titres
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      Aucune playlist Spotify trouvée.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!spotifyConnected && (
+                <div className="bg-[#1DB954]/10 border border-[#1DB954]/20 rounded-xl p-4 text-center">
+                  <p className="text-sm text-gray-300 mb-3">Connectez Spotify pour ajouter directement à vos playlists !</p>
+                  <Link href="/settings/connections" className="inline-block bg-[#1DB954] text-black font-bold px-4 py-2 rounded-full text-sm hover:scale-105 transition">
+                    Connecter Spotify
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUser }: DiscoverCardProps) {
   const [showComments, setShowComments] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
   const [comments, setComments] = useState<{
@@ -88,32 +329,32 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
           if (currentUser) {
             const { data: userAlbumLike } = await supabase
               .from('album_likes')
-            .select('id')
-            .eq('album_id', review.album_id)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-          
+              .select('id')
+              .eq('album_id', review.album_id)
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+
             setHasLiked(!!userAlbumLike);
           }
-          } else {
+        } else {
           // Pour les vraies reviews, utiliser la table likes
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
+          const { count: likesCount } = await supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
             .eq('review_id', review.id);
 
-        setLikesCount(likesCount || 0);
+          setLikesCount(likesCount || 0);
 
           // Vérifier si l'utilisateur actuel a liké
-        if (currentUser) {
-          const { data: userLike } = await supabase
-            .from('likes')
-            .select('id')
+          if (currentUser) {
+            const { data: userLike } = await supabase
+              .from('likes')
+              .select('id')
               .eq('review_id', review.id)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
 
-          setHasLiked(!!userLike);
+            setHasLiked(!!userLike);
           }
         }
       } catch (error) {
@@ -131,7 +372,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         try {
           // Pour les découvertes système, chercher une review existante
           let reviewId = review.id;
-          
+
           if (review.user_id === 'system' && currentUser) {
             const { data: existingReview } = await supabase
               .from('reviews')
@@ -139,7 +380,7 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
               .eq('album_id', review.album_id)
               .eq('user_id', currentUser.id)
               .maybeSingle();
-            
+
             if (existingReview) {
               reviewId = existingReview.id;
             } else {
@@ -248,26 +489,49 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
             });
 
           if (error) throw error;
+
+          // SYNCHRONISATION SPOTIFY (ALBUM)
+          // On tente de liker l'album ou une piste représentative
+          fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUser.id,
+              action: 'like',
+              query: `${review.album_name} ${review.artist_name}`
+            })
+          }).catch(e => console.log('Spotify sync skipped', e));
         }
       } else {
         // Pour les vraies reviews, utiliser la table likes
-      if (previousHasLiked) {
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('user_id', currentUser.id)
+        if (previousHasLiked) {
+          const { error } = await supabase
+            .from('likes')
+            .delete()
+            .eq('user_id', currentUser.id)
             .eq('review_id', review.id);
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('likes')
-          .insert({
-            user_id: currentUser.id,
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('likes')
+            .insert({
+              user_id: currentUser.id,
               review_id: review.id
-          });
+            });
 
-        if (error) throw error;
+          if (error) throw error;
+
+          // SYNCHRONISATION SPOTIFY (TRACK/ALBUM)
+          fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUser.id,
+              action: 'like',
+              query: `${review.album_name} ${review.artist_name}`
+            })
+          }).catch(e => console.log('Spotify sync skipped', e));
         }
       }
     } catch (error) {
@@ -395,11 +659,10 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
             {isActive && (
               <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
                 {isAudioEnabled && (
-                  <div className={`w-3 h-3 rounded-full ${
-                    audioState?.isPlaying ? 'bg-[#00e054] animate-pulse' :
+                  <div className={`w-3 h-3 rounded-full ${audioState?.isPlaying ? 'bg-[#00e054] animate-pulse' :
                     audioState?.isLoading ? 'bg-yellow-500 animate-pulse' :
-                    'bg-gray-500'
-                  }`} />
+                      'bg-gray-500'
+                    }`} />
                 )}
                 {!isAudioEnabled && (
                   <div className="text-white/50 text-sm">🔇</div>
@@ -417,179 +680,227 @@ function DiscoverCard({ review, isActive, audioState, isAudioEnabled, currentUse
         </div>
 
         {/* ACTIONS DROITE (Style Instagram Reels) */}
-        <div className="absolute right-4 md:right-6 top-[42%] md:top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 md:gap-5">
+        <div className="absolute right-2 md:right-6 top-[45%] -translate-y-1/2 flex flex-col items-center gap-4 z-40">
+
+          {/* LIKE */}
           <button
             onClick={handleLike}
-            className={`p-3 md:p-4 rounded-full border-2 transition-all backdrop-blur-xl shadow-lg ${
-              hasLiked
-                ? 'bg-[#00e054] border-[#00e054] text-black'
-                : 'bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60'
-            }`}
-            title={hasLiked ? "Retirer le like" : "Aimer"}
+            className="group flex flex-col items-center gap-0.5"
           >
-            <div className="flex flex-col items-center">
-              <span className="text-2xl md:text-3xl">{hasLiked ? '♥' : '♡'}</span>
-              <span className="text-xs mt-1 font-bold">{likesCount}</span>
+            <div className={`p-1.5 transition-transform active:scale-90 ${hasLiked ? 'text-red-500' : 'text-white'}`}>
+              <Heart
+                size={28}
+                fill={hasLiked ? "currentColor" : "none"}
+                className="drop-shadow-lg md:w-8 md:h-8"
+                strokeWidth={2}
+              />
             </div>
+            <span className="text-[10px] md:text-xs font-semibold text-white shadow-black drop-shadow-md">
+              {likesCount}
+            </span>
           </button>
 
+          {/* COMMENT */}
           <button
             onClick={() => setShowComments(true)}
-            className="p-3 md:p-4 rounded-full border-2 bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60 transition-all backdrop-blur-xl shadow-lg"
-            title="Commenter"
+            className="group flex flex-col items-center gap-0.5"
           >
-            <div className="flex flex-col items-center">
-              <span className="text-2xl md:text-3xl">💬</span>
-              {comments.length > 0 && (
-                <span className="text-xs mt-1 font-bold">{comments.length}</span>
-              )}
+            <div className="p-1.5 text-white transition-transform active:scale-90 group-hover:text-gray-200">
+              <MessageCircle size={28} className="drop-shadow-lg md:w-8 md:h-8" strokeWidth={2} />
             </div>
+            {comments.length > 0 && (
+              <span className="text-[10px] md:text-xs font-semibold text-white shadow-black drop-shadow-md">
+                {comments.length}
+              </span>
+            )}
+            {comments.length === 0 && (
+              <span className="text-[10px] md:text-xs font-semibold text-white shadow-black drop-shadow-md">
+                0
+              </span>
+            )}
           </button>
 
+          {/* ADD TO PLAYLIST */}
+          <button
+            onClick={() => {
+              if (currentUser) {
+                setShowPlaylistModal(true);
+              } else {
+                alert("Connectez-vous pour ajouter à une playlist");
+              }
+            }}
+            className="group flex flex-col items-center gap-0.5"
+            title="Ajouter à une playlist"
+          >
+            <div className="p-1.5 text-white transition-transform active:scale-90 group-hover:text-[#00e054]">
+              <ListPlus size={28} className="drop-shadow-lg md:w-8 md:h-8" strokeWidth={2} />
+            </div>
+            <span className="text-[10px] md:text-xs font-semibold text-white shadow-black drop-shadow-md">
+              Ajouter
+            </span>
+          </button>
+
+          {/* VIEW ALBUM */}
           <Link
             href={`/album-view?id=${review.album_id}`}
-            className="p-3 md:p-4 rounded-full border-2 bg-black/40 border-white/20 text-white hover:border-[#00e054] hover:text-[#00e054] hover:bg-black/60 transition-all backdrop-blur-xl shadow-lg"
+            className="group flex flex-col items-center gap-0.5"
             title="Voir l'album"
           >
-            <span className="text-2xl md:text-3xl">👁️</span>
+            <div className="p-1.5 text-white transition-transform active:scale-90 group-hover:text-[#00e054]">
+              <Eye size={28} className="drop-shadow-lg md:w-8 md:h-8" strokeWidth={2} />
+            </div>
+            <span className="text-[10px] md:text-xs font-semibold text-white shadow-black drop-shadow-md">
+              Voir
+            </span>
           </Link>
         </div>
       </div>
 
+      {/* MODALE PLAYLIST */}
+      <AnimatePresence>
+        {showPlaylistModal && currentUser && (
+          <PlaylistSelector
+            userId={currentUser.id}
+            track={review}
+            onClose={() => setShowPlaylistModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* MODALE COMMENTAIRES FONCTIONNELLE */}
       <AnimatePresence>
-      {showComments && (
-        <motion.div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          {/* Backdrop avec blur */}
-          <motion.div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+        {showComments && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowComments(false)}
-          />
-
-          <motion.div 
-            className="relative bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[80vh]"
-            initial={{ opacity: 0, scale: 0.9, y: 50 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 50 }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            transition={{ duration: 0.2 }}
           >
-            <div className="flex justify-between items-center mb-6">
-              <motion.h2 
-                className="text-2xl font-bold text-white"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                Commentaires
-              </motion.h2>
-              <motion.button 
-                onClick={() => setShowComments(false)} 
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                ×
-              </motion.button>
-            </div>
+            {/* Backdrop avec blur */}
+            <motion.div
+              className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowComments(false)}
+            />
 
-            {/* Liste des commentaires */}
-            <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
-              <AnimatePresence mode="popLayout">
-              {comments.length > 0 ? comments.map((c, index) => (
-                <motion.div 
-                  key={c.id} 
-                  className="flex gap-3 bg-white/5 p-3 rounded-xl border border-white/5 hover:bg-white/[0.08] transition-all"
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -100, scale: 0.8 }}
-                  transition={{ 
-                    type: "spring",
-                    stiffness: 500,
-                    damping: 30,
-                    delay: index * 0.05
-                  }}
-                  layout
-                >
-                  <Link href={`/profile-view?u=${c.profiles?.username}`} className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400 hover:border-[#00e054] transition-all">
-                    {c.profiles?.avatar_url ? (
-                      <img src={c.profiles.avatar_url} alt={c.profiles.username} className="w-full h-full object-cover"/>
-                    ) : (
-                      c.profiles?.username?.[0]?.toUpperCase()
-                    )}
-                  </Link>
-                  <div className="flex-1">
-                    <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-xs font-bold text-[#00e054] block mb-1 hover:text-[#00c04b] transition">{c.profiles?.username}</Link>
-                    <p className="text-sm text-gray-300 leading-relaxed">{c.content}</p>
-                    <span className="text-xs text-gray-500 mt-1 block">
-                      {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </motion.div>
-              )) : (
-                <motion.div 
-                  className="text-center text-gray-500 py-10 italic"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <motion.div 
-                    className="text-4xl mb-4"
-                    animate={{ 
-                      rotate: [0, -10, 10, -10, 0],
-                      scale: [1, 1.1, 1]
-                    }}
-                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
-                  >
-                    💬
-                  </motion.div>
-                  Soyez le premier à commenter cette critique !
-                </motion.div>
-              )}
-              </AnimatePresence>
-            </div>
-
-            {/* Formulaire de commentaire */}
-            <motion.div 
-              className="flex gap-2 pt-4 border-t border-white/10"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
+            <motion.div
+              className="relative bg-[#1a1a1a] p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl flex flex-col max-h-[80vh]"
+              initial={{ opacity: 0, scale: 0.9, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 50 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
-              <input
-                className="flex-1 bg-black border border-white/20 rounded-full px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-[#00e054] focus:outline-none transition"
-                value={newComment}
-                onChange={e => setNewComment(e.target.value)}
-                placeholder={currentUser ? "Écrire un commentaire..." : "Connectez-vous pour commenter"}
-                disabled={!currentUser}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handlePostComment();
-                  }
-                }}
-              />
-              <motion.button
-                onClick={handlePostComment}
-                disabled={!newComment.trim() || !currentUser}
-                className="bg-[#00e054] text-black w-12 h-12 rounded-full font-bold flex items-center justify-center hover:bg-[#00c04b] disabled:opacity-50 disabled:cursor-not-allowed transition"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <div className="flex justify-between items-center mb-6">
+                <motion.h2
+                  className="text-2xl font-bold text-white"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  Commentaires
+                </motion.h2>
+                <motion.button
+                  onClick={() => setShowComments(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <X size={20} />
+                </motion.button>
+              </div>
+
+              {/* Liste des commentaires */}
+              <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
+                <AnimatePresence mode="popLayout">
+                  {comments.length > 0 ? comments.map((c, index) => (
+                    <motion.div
+                      key={c.id}
+                      className="flex gap-3 bg-white/5 p-3 rounded-xl border border-white/5 hover:bg-white/[0.08] transition-all"
+                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -100, scale: 0.8 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 30,
+                        delay: index * 0.05
+                      }}
+                      layout
+                    >
+                      <Link href={`/profile-view?u=${c.profiles?.username}`} className="w-8 h-8 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden text-xs flex items-center justify-center font-bold border border-white/10 text-gray-400 hover:border-[#00e054] transition-all">
+                        {c.profiles?.avatar_url ? (
+                          <img src={c.profiles.avatar_url} alt={c.profiles.username} className="w-full h-full object-cover" />
+                        ) : (
+                          c.profiles?.username?.[0]?.toUpperCase()
+                        )}
+                      </Link>
+                      <div className="flex-1">
+                        <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-xs font-bold text-[#00e054] block mb-1 hover:text-[#00c04b] transition">{c.profiles?.username}</Link>
+                        <p className="text-sm text-gray-300 leading-relaxed">{c.content}</p>
+                        <span className="text-xs text-gray-500 mt-1 block">
+                          {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </motion.div>
+                  )) : (
+                    <motion.div
+                      className="text-center text-gray-500 py-10 italic"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <motion.div
+                        className="text-4xl mb-4"
+                        animate={{
+                          rotate: [0, -10, 10, -10, 0],
+                          scale: [1, 1.1, 1]
+                        }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+                      >
+                        💬
+                      </motion.div>
+                      Soyez le premier à commenter cette critique !
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Formulaire de commentaire */}
+              <motion.div
+                className="flex gap-2 pt-4 border-t border-white/10"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
               >
-                ➤
-              </motion.button>
+                <input
+                  className="flex-1 bg-black border border-white/20 rounded-full px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-[#00e054] focus:outline-none transition"
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  placeholder={currentUser ? "Écrire un commentaire..." : "Connectez-vous pour commenter"}
+                  disabled={!currentUser}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handlePostComment();
+                    }
+                  }}
+                />
+                <motion.button
+                  onClick={handlePostComment}
+                  disabled={!newComment.trim() || !currentUser}
+                  className="bg-[#00e054] text-black w-12 h-12 rounded-full font-bold flex items-center justify-center hover:bg-[#00c04b] disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  ➤
+                </motion.button>
+              </motion.div>
             </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        )}
       </AnimatePresence>
     </div>
   );
@@ -634,7 +945,7 @@ export default function DiscoverPage() {
     setLoading(true);
     try {
       console.log('🎬 Chargement initial du feed...');
-      
+
       const response = await fetch('/api/feed', {
         method: 'POST',
         headers: {
@@ -750,7 +1061,7 @@ export default function DiscoverPage() {
 
       setFriendReviews(friendReviewsData || []);
     } catch (error) {
-      console.error('Erreur lors de la récupération des critiques des amis:', error);
+      console.error('Erreur lors du chargement des critiques des amis:', error);
     } finally {
       setFriendLoading(false);
     }
@@ -766,9 +1077,13 @@ export default function DiscoverPage() {
     isFetchingRef.current = true;
     setLoadingMore(true);
 
+    // PRESERVE SCROLL POSITION
+    const container = containerRef.current;
+    const scrollBeforeLoad = container?.scrollTop || 0;
+
     try {
       console.log('📥 Chargement de nouveaux items...');
-      
+
       // Récupérer les IDs déjà vus
       const seenIds = reviews.map(r => r.id);
 
@@ -789,6 +1104,14 @@ export default function DiscoverPage() {
         console.log(`✅ ${data.items.length} nouveaux items chargés`);
         setReviews(prev => [...prev, ...data.items]);
         setHasMore(data.hasMore);
+
+        // RESTORE SCROLL POSITION after DOM updates
+        setTimeout(() => {
+          if (container && scrollBeforeLoad > 0) {
+            container.scrollTop = scrollBeforeLoad;
+            console.log(`🔄 Scroll restauré à ${scrollBeforeLoad}px`);
+          }
+        }, 100);
       } else {
         console.log('⚠️ Pas de nouveaux items disponibles');
         setHasMore(false);
@@ -807,7 +1130,7 @@ export default function DiscoverPage() {
 
     try {
       // Vérifier le cache d'abord (mais ne pas bloquer sur null)
-        const cached = previewCacheRef.current.get(cacheKey);
+      const cached = previewCacheRef.current.get(cacheKey);
       if (cached) {
         console.log(`💾 Cache hit: ${albumName}`);
         return cached;
@@ -818,9 +1141,9 @@ export default function DiscoverPage() {
       // STRATÉGIE SIMPLE : Une seule recherche directe
       const searchTerm = `${albumName} ${artistName}`.replace(/[^\w\s]/g, ' ').trim().substring(0, 60);
       const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=5`);
-          const data = await response.json();
+      const data = await response.json();
 
-          if (data.results && data.results.length > 0) {
+      if (data.results && data.results.length > 0) {
         // Prendre le premier résultat avec preview
         const trackWithPreview = data.results.find((t: any) => t.previewUrl);
         if (trackWithPreview?.previewUrl) {
@@ -853,31 +1176,31 @@ export default function DiscoverPage() {
         currentAudioRef.current.pause();
         currentAudioRef.current.currentTime = 0;
         currentAudioRef.current = null;
-    }
+      }
 
-    // Marquer comme en chargement
-    setAudioStates(prev => ({
-      ...prev,
+      // Marquer comme en chargement
+      setAudioStates(prev => ({
+        ...prev,
         [albumId]: { audio: null, isPlaying: false, previewUrl: null, isLoading: true, lastPlayAttempt: Date.now() }
-    }));
+      }));
 
       // Récupérer le preview (utiliser le cache si disponible)
       let previewUrl = cachedPreviewUrl || null;
-      
+
       if (!previewUrl) {
         previewUrl = await fetchAudioPreview(albumId, albumName, artistName);
       } else {
         console.log('💾 Utilisation du preview caché');
       }
-      
-        if (!previewUrl) {
+
+      if (!previewUrl) {
         console.log('❌ Pas de preview disponible');
-          setAudioStates(prev => ({
-            ...prev,
-            [albumId]: { ...prev[albumId], isLoading: false }
-          }));
-          return;
-        }
+        setAudioStates(prev => ({
+          ...prev,
+          [albumId]: { ...prev[albumId], isLoading: false }
+        }));
+        return;
+      }
 
       // Créer et configurer l'audio
       const audio = new Audio(previewUrl);
@@ -1024,7 +1347,7 @@ export default function DiscoverPage() {
 
   // Charger les critiques des amis quand on change vers l'onglet amis
   const prevTabRef = useRef<'discover' | 'friends'>('discover');
-  
+
   useEffect(() => {
     // Charger les reviews des amis si nécessaire
     if (activeTab === 'friends' && user && friendReviews.length === 0) {
@@ -1052,7 +1375,7 @@ export default function DiscoverPage() {
         setupIntersectionObserver();
         console.log('✅ Observer configuré');
       }, 500);
-      
+
       return () => clearTimeout(timer);
     }
   }, [reviews.length, friendReviews.length, loading, friendLoading, activeTab]); // Retiré setupIntersectionObserver
@@ -1060,7 +1383,7 @@ export default function DiscoverPage() {
   // Gérer le changement de carte visible et la lecture audio
   useEffect(() => {
     console.log(`🎬 useEffect audio: card=${currentVisibleCard}, enabled=${isAudioEnabled}, tab=${activeTab}`);
-    
+
     if (!currentVisibleCard) {
       console.log('⏭️ Pas de carte visible');
       return;
@@ -1073,7 +1396,7 @@ export default function DiscoverPage() {
     if (isAudioEnabled) {
       const currentReviews = activeTab === 'discover' ? reviews : friendReviews;
       console.log(`📚 Recherche dans ${currentReviews.length} reviews`);
-      
+
       const review = currentReviews.find(r => {
         const match = String(r.album_id) === String(currentVisibleCard);
         if (!match && currentReviews.length <= 3) {
@@ -1081,16 +1404,16 @@ export default function DiscoverPage() {
         }
         return match;
       });
-      
+
       if (review) {
         console.log(`✅ Review trouvée: "${review.album_name}" - ${review.artist_name}`);
         console.log('🔄 Lancement de la lecture audio...');
-        
+
         // Petit délai pour laisser le scroll se stabiliser
         const timer = setTimeout(() => {
           playAudio(currentVisibleCard, review.album_name, review.artist_name, review.preview_url_cache);
         }, 200);
-        
+
         return () => clearTimeout(timer);
       } else {
         console.log(`❌ Review non trouvée pour album_id: ${currentVisibleCard}`);
@@ -1180,35 +1503,35 @@ export default function DiscoverPage() {
       {/* NAVBAR FLOTTANTE */}
       <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
         <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
-            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            
-            <div className="hidden md:flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
-                <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
-                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
-                </Link>
-                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
-                </Link>
-                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
-                
-                {/* Bouton audio */}
-                <button
-                  onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-                  className={`transition text-lg md:text-base p-1.5 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
-                  title={isAudioEnabled ? "Désactiver l'audio" : "Activer l'audio"}
-                >
-                  {isAudioEnabled ? "🔊" : "🔇"}
-                </button>
-                
-                {user ? (
-                    <ProfileMenu user={user} />
-                ) : (
-                    <Link href="/login" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
-                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">?</div>
-                    </Link>
-                )}
-            </div>
+          <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+
+          <div className="hidden md:flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+            <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
+            <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+            </Link>
+            <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+            </Link>
+            <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+
+            {/* Bouton audio */}
+            <button
+              onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+              className={`transition text-lg md:text-base p-1.5 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
+              title={isAudioEnabled ? "Désactiver l'audio" : "Activer l'audio"}
+            >
+              {isAudioEnabled ? "🔊" : "🔇"}
+            </button>
+
+            {user ? (
+              <ProfileMenu user={user} />
+            ) : (
+              <Link href="/login" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
+                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">?</div>
+              </Link>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -1217,21 +1540,19 @@ export default function DiscoverPage() {
         <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
           <button
             onClick={() => setActiveTab('friends')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${
-              activeTab === 'friends'
-                ? 'bg-[#00e054] text-black'
-                : 'text-white hover:text-[#00e054]'
-            }`}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${activeTab === 'friends'
+              ? 'bg-[#00e054] text-black'
+              : 'text-white hover:text-[#00e054]'
+              }`}
           >
             👥 Amis
           </button>
           <button
             onClick={() => setActiveTab('discover')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${
-              activeTab === 'discover'
-                ? 'bg-[#00e054] text-black'
-                : 'text-white hover:text-[#00e054]'
-            }`}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${activeTab === 'discover'
+              ? 'bg-[#00e054] text-black'
+              : 'text-white hover:text-[#00e054]'
+              }`}
           >
             ⚡ Découvrir
           </button>
@@ -1241,7 +1562,7 @@ export default function DiscoverPage() {
       {/* CONTENEUR PRINCIPAL AVEC SCROLL SNAP */}
       <div
         ref={containerRef}
-        className="h-screen overflow-y-auto snap-y snap-mandatory pt-0 md:pt-36"
+        className="h-screen overflow-y-auto overflow-x-hidden snap-y snap-mandatory pt-0 md:pt-36"
       >
         {currentReviews.length > 0 ? (
           <>
@@ -1255,7 +1576,7 @@ export default function DiscoverPage() {
                 currentUser={user || null}
               />
             ))}
-            
+
             {/* Élément trigger pour le scroll infini (seulement pour l'onglet Découvrir) */}
             {activeTab === 'discover' && hasMore && (
               <div
@@ -1280,15 +1601,12 @@ export default function DiscoverPage() {
               </div>
             )}
 
-            {/* Message de fin si plus de contenu */}
+            {/* Message de fin - NE DEVRAIT PAS APPARAITRE AVEC LE SCROLL INFINI */}
             {activeTab === 'discover' && !hasMore && !loadingMore && (
               <div className="h-screen snap-start flex items-center justify-center">
                 <div className="text-center text-white">
-                  <div className="text-6xl mb-4">🎉</div>
-                  <div className="text-xl font-bold mb-2">Vous avez tout vu !</div>
-                  <div className="text-gray-400">
-                    Revenez plus tard pour de nouvelles découvertes
-                  </div>
+                  <div className="w-16 h-16 border-4 border-[#00e054] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-lg font-bold">Recherche de nouveautés...</p>
                 </div>
               </div>
             )}

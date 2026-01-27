@@ -23,7 +23,7 @@ export default function CreateListPage() {
     type?: string;
     year?: number;
   };
-  
+
   // États Import Spotify/Deezer
   const [importUrl, setImportUrl] = useState("");
   const [importPlatform, setImportPlatform] = useState<'spotify' | 'deezer'>('spotify');
@@ -77,8 +77,8 @@ export default function CreateListPage() {
     if (platform === 'spotify' && !importUrl.includes('open.spotify.com/playlist')) {
       return alert("Lien Spotify invalide. Utilisez un lien de playlist Spotify publique.");
     }
-    if (platform === 'deezer' && !importUrl.includes('deezer.com') && !importUrl.includes('/playlist/')) {
-      return alert("Lien Deezer invalide. Utilisez un lien de playlist Deezer publique.");
+    if (platform === 'deezer' && !importUrl.includes('deezer.com') && !importUrl.includes('link.deezer.com')) {
+      return alert("Lien Deezer invalide. Utilisez un lien de playlist Deezer (mobile ou desktop).");
     }
 
     setIsImporting(true);
@@ -109,20 +109,20 @@ export default function CreateListPage() {
         if (newItems.length === 0) {
           alert("Aucun nouveau titre à importer (déjà présents dans la liste).");
         } else {
-            const formattedItems = newItems
-              .filter((item: ImportedItem): item is ImportedItem & { name: string; artist: string } =>
-                Boolean(item.name && item.artist)
-              ) // Type guard pour affiner le type
-              .map((item: ImportedItem & { name: string; artist: string }) => ({
-                id: item.id,
-                targetId: item.targetId || item.id,
-                name: item.name,
-                artist: item.artist,
-                image: item.image,
-                type: (item.type as 'album' | 'song') || 'song',
-                year: item.year
-              }));
-            setSelectedItems(prev => [...prev, ...formattedItems]);
+          const formattedItems = newItems
+            .filter((item: ImportedItem): item is ImportedItem & { name: string; artist: string } =>
+              Boolean(item.name && item.artist)
+            )
+            .map((item: ImportedItem & { name: string; artist: string }) => ({
+              id: item.id,
+              targetId: item.targetId || item.id,
+              name: item.name,
+              artist: item.artist,
+              image: item.image,
+              type: (item.type as 'album' | 'song') || 'song',
+              year: item.year
+            }));
+          setSelectedItems(prev => [...prev, ...formattedItems]);
           const platformName = platform === 'spotify' ? 'Spotify' : 'Deezer';
           const totalKey = platform === 'spotify' ? 'totalSpotify' : 'totalDeezer';
           alert(`${newItems.length} titre(s) importé(s) avec succès depuis ${platformName} ! (${data.imported}/${data[totalKey]})`);
@@ -189,169 +189,299 @@ export default function CreateListPage() {
     setIsSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-        const { error } = await supabase.from('lists').insert({
-            user_id: user.id, title, description, albums: selectedItems
-        });
-        if (error) alert("Erreur."); else { router.push('/profile'); }
+      const { error } = await supabase.from('lists').insert({
+        user_id: user.id, title, description, albums: selectedItems
+      });
+      if (error) alert("Erreur."); else { router.push('/profile'); }
     }
     setIsSaving(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans p-2 md:p-6 selection:bg-[#00e054] selection:text-black">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black">
 
-      {/* Background Glow */}
-      <div className="fixed top-[-20%] right-[-10%] w-[60%] md:w-[50%] h-[50%] bg-green-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      {/* Background Gradient */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#00e054]/10 rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px]" />
+      </div>
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
-        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] rounded-full w-full max-w-5xl transition-all duration-300">
-            <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
-                <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
-                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
-                </Link>
-                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
-                </Link>
-                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
-                {currentUser ? (
-                    <ProfileMenu user={currentUser} />
-                ) : (
-                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
-                )}
-            </div>
+      <div className="fixed top-4 left-0 right-0 justify-center z-50 px-4 hidden md:flex">
+        <nav className="flex items-center justify-between px-8 py-3 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] rounded-full w-full max-w-5xl transition-all duration-300">
+          <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+          <div className="flex items-center gap-8 text-xs font-bold uppercase tracking-widest text-white/70">
+            <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
+            <Link href="/discover" className="hover:text-white transition flex items-center gap-2">
+              <span className="text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+            </Link>
+            <Link href="/lists/import" className="hover:text-white transition flex items-center gap-2">
+              <span className="text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+            </Link>
+            <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+            {currentUser ? (
+              <ProfileMenu user={currentUser} />
+            ) : (
+              <Link href="/login" className="bg-white text-black px-4 py-2 rounded-full hover:bg-[#00e054] transition text-sm">Connexion</Link>
+            )}
+          </div>
         </nav>
       </div>
 
-      <div className="max-w-2xl mx-auto mt-8 md:mt-10 pt-16 md:pt-0 relative z-10 space-y-4 md:space-y-12">
+      {/* MAIN CONTENT */}
+      <div className="relative z-10 max-w-4xl mx-auto px-4 pt-8 md:pt-28 pb-32">
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 md:mb-8 gap-2">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-center sm:text-left">Nouvelle Liste</h1>
-          <button onClick={() => router.back()} className="text-gray-400 hover:text-white text-sm md:text-base transition-colors">Annuler</button>
+        <div className="flex items-center justify-between mb-12">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">Nouvelle Liste</h1>
+            <p className="text-gray-500 text-sm">Créez votre collection musicale personnalisée</p>
+          </div>
+          <button
+            onClick={() => router.back()}
+            className="text-gray-400 hover:text-white transition-colors text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/5"
+          >
+            Annuler
+          </button>
         </div>
-        {/* --- Import Spotify/Deezer --- */}
-        <div className="bg-white/10 backdrop-blur-xl p-4 md:p-6 rounded-2xl border border-white/15 shadow-lg mb-4 md:mb-8">
-          <h2 className="text-xs md:text-sm font-bold text-white uppercase tracking-widest mb-3 flex items-center gap-2">
-            🎵 Importer une Playlist
-          </h2>
-          
-          {/* Sélecteur de plateforme */}
-          <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => setImportPlatform('spotify')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold uppercase transition-all duration-300 ${
-                importPlatform === 'spotify'
-                  ? 'bg-[#1DB954] text-black shadow-lg shadow-[#1DB954]/20'
-                  : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <span className="text-base">🟢</span> Spotify
-            </button>
-            <button
-              onClick={() => setImportPlatform('deezer')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold uppercase transition-all duration-300 ${
-                importPlatform === 'deezer'
-                  ? 'bg-gradient-to-r from-[#a400a4] to-[#8d01f1] text-white shadow-lg'
-                  : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <span className="text-base">🎧</span> Deezer
-            </button>
+
+        {/* Form Section */}
+        <div className="space-y-8">
+
+          {/* Details */}
+          <div className="space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Nom de la liste"
+                className="w-full bg-transparent border-b-2 border-white/10 focus:border-[#00e054] outline-none text-2xl font-bold py-3 transition-colors placeholder:text-white/20"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="relative">
+              <textarea
+                placeholder="Description (optionnelle)"
+                className="w-full bg-white/5 border border-white/10 focus:border-white/20 rounded-2xl outline-none p-4 transition-colors resize-none placeholder:text-white/30"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input 
-              type="text"
-              placeholder={`Collez le lien de la playlist ${importPlatform === 'spotify' ? 'Spotify' : 'Deezer'} ici...`}
-              className="flex-1 bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-3 text-white focus:border-[#00e054] outline-none text-sm transition"
-              value={importUrl}
-              onChange={(e) => setImportUrl(e.target.value)}
-            />
-            <button 
-              onClick={handleImport}
-              disabled={isImporting}
-              className={`font-bold px-4 py-2 rounded-xl md:px-6 transition disabled:opacity-50 text-sm shadow-xl whitespace-nowrap ${
-                importPlatform === 'spotify'
-                  ? 'bg-[#1DB954] text-black hover:bg-[#1ed760] shadow-[#1DB954]/20'
-                  : 'bg-gradient-to-r from-[#8b0068] to-[#81009b] text-white hover:opacity-90'
-              }`}
-            >
-              {isImporting ? 'Import...' : 'Importer'}
-            </button>
+          {/* Import Section */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 hover:border-white/15 transition-all duration-300">
+            <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <span className="text-lg">🎵</span> Importer une playlist
+            </h2>
+
+            {/* Tabs */}
+            <div className="flex gap-1 mb-4 bg-white/5 p-1 rounded-xl">
+              <button
+                onClick={() => setImportPlatform('spotify')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${importPlatform === 'spotify'
+                  ? 'bg-[#1DB954] text-black shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+                  }`}
+              >
+                <span>🟢</span> Spotify
+              </button>
+              <button
+                onClick={() => setImportPlatform('deezer')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${importPlatform === 'deezer'
+                  ? 'bg-gradient-to-r from-[#a400a4] to-[#8d01f1] text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+                  }`}
+              >
+                <span>🎧</span> Deezer
+              </button>
+            </div>
+
+            {/* Input */}
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder={`URL de la playlist ${importPlatform === 'spotify' ? 'Spotify' : 'Deezer'}...`}
+                  className="w-full bg-white/5 border border-white/10 focus:border-[#00e054] rounded-xl px-4 py-3 outline-none transition-colors placeholder:text-white/30"
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={handleImport}
+                disabled={isImporting}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 whitespace-nowrap ${importPlatform === 'spotify'
+                  ? 'bg-[#1DB954] text-black hover:bg-[#1ed760]'
+                  : 'bg-gradient-to-r from-[#a400a4] to-[#8d01f1] text-white hover:opacity-90'
+                  }`}
+              >
+                {isImporting ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Import...
+                  </div>
+                ) : 'Importer'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              {importPlatform === 'spotify'
+                ? 'Lien public Spotify. Les correspondances seront trouvées automatiquement.'
+                : 'Lien mobile ou desktop. Les correspondances seront trouvées automatiquement.'}
+            </p>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            {importPlatform === 'spotify'
-              ? 'Collez un lien de playlist Spotify publique. Nous trouverons les correspondances sur MusicBoxd.'
-              : 'Collez un lien de playlist Deezer publique. Nous trouverons les correspondances sur MusicBoxd.'
-            }
-          </p>
-        </div>
-        {/* --- Formulaire classique --- */}
-        <div className="bg-white/10 backdrop-blur-xl p-4 md:p-6 rounded-2xl border border-white/15 shadow-lg mb-4 md:mb-8 space-y-4">
-          <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Détails</label>
-          <input type="text" className="w-full bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-4 text-white focus:border-[#00e054] outline-none text-lg font-bold mb-2" placeholder="Titre de la liste..." value={title} onChange={(e) => setTitle(e.target.value)} />
-          <textarea className="w-full bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-4 text-white focus:border-[#00e054] outline-none h-24 text-sm" placeholder="Description..." value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        {/* --- Ajout Manuel --- */}
-        <div className="bg-white/10 backdrop-blur-xl p-4 md:p-6 rounded-2xl border border-white/15 shadow-lg mb-4 md:mb-8">
-          <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Ajout Manuel</label>
-          <div className="flex gap-2 mb-3">
-            <button onClick={() => setSearchType('album')} className={`px-3 py-2 rounded-full text-xs font-bold uppercase transition-all duration-300 ${searchType === 'album' ? 'bg-[#00e054] text-black shadow-lg shadow-[#00e054]/20' : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'}`}>Albums</button>
-            <button onClick={() => setSearchType('song')} className={`px-3 py-2 rounded-full text-xs font-bold uppercase transition-all duration-300 ${searchType === 'song' ? 'bg-[#00e054] text-black shadow-lg shadow-[#00e054]/20' : 'bg-white/10 backdrop-blur-lg text-gray-400 hover:bg-white/20 hover:text-white'}`}>Titres</button>
+
+          {/* Manual Search */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 hover:border-white/15 transition-all duration-300">
+            <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4">Recherche manuelle</h2>
+
+            {/* Type Selector */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setSearchType('album')}
+                className={`px-4 py-2 rounded-full text-xs font-semibold uppercase transition-all duration-300 ${searchType === 'album'
+                  ? 'bg-[#00e054] text-black'
+                  : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+              >
+                Albums
+              </button>
+              <button
+                onClick={() => setSearchType('song')}
+                className={`px-4 py-2 rounded-full text-xs font-semibold uppercase transition-all duration-300 ${searchType === 'song'
+                  ? 'bg-[#00e054] text-black'
+                  : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+              >
+                Titres
+              </button>
+            </div>
+
+            {/* Search Form */}
+            <form onSubmit={searchItems} className="relative">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder={`Rechercher un ${searchType === 'album' ? 'album' : 'titre'}...`}
+                  className="flex-1 bg-white/5 border border-white/10 focus:border-[#00e054] rounded-xl px-4 py-3 outline-none transition-colors placeholder:text-white/30"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching}
+                  className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all duration-300 font-semibold"
+                >
+                  {isSearching ? '...' : '🔍'}
+                </button>
+              </div>
+
+              {/* Results Dropdown */}
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#0a0a0a] border border-white/15 rounded-2xl overflow-hidden shadow-2xl z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {searchResults.map((item) => (
+                    <div
+                      key={item.collectionId || item.trackId}
+                      onClick={() => addItem(item)}
+                      className="flex items-center gap-3 p-3 hover:bg-[#00e054]/10 cursor-pointer transition-colors border-b border-white/5 last:border-0"
+                    >
+                      <img src={item.artworkUrl100} className="w-12 h-12 rounded-lg bg-black/50" alt="cover" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm truncate">{item.trackName || item.collectionName}</div>
+                        <div className="text-xs text-gray-400 truncate">{item.artistName}</div>
+                      </div>
+                      <div className="text-[#00e054]">+</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </form>
           </div>
-          <form onSubmit={searchItems} className="flex gap-2 relative">
-            <input type="text" className="w-full bg-white/10 backdrop-blur-lg border border-white/15 rounded-xl p-4 text-white focus:border-[#00e054] outline-none" placeholder={`Chercher un ${searchType === 'album' ? 'album' : 'titre'}...`} value={query} onChange={(e) => setQuery(e.target.value)} />
-            <button type="submit" disabled={isSearching} className="bg-white/10 backdrop-blur-lg px-4 md:px-6 rounded-xl font-bold text-gray-300 hover:bg-white/20 hover:text-white transition-all duration-300 shadow-md">{isSearching ? '...' : '🔍'}</button>
-            {/* Dropdown résultats */}
-            {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-white/20 backdrop-blur-xl border border-white/15 mt-2 rounded-xl shadow-2xl z-20 max-h-60 overflow-y-auto">
-                {searchResults.map((item) => (
-                  <div key={item.collectionId || item.trackId} onClick={() => addItem(item)} className="flex items-center gap-3 p-3 hover:bg-[#00e054] hover:text-black cursor-pointer transition border-b border-white/5 last:border-0">
-                    <img src={item.artworkUrl100} className="w-10 h-10 rounded bg-black" alt="cover"/>
-                    <div>
-                      <div className="font-bold text-sm">{item.trackName || item.collectionName}</div>
-                      <div className="text-xs opacity-70">{item.artistName}</div>
+
+          {/* Items Grid */}
+          <div>
+            <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4">
+              {selectedItems.length > 0 ? `${selectedItems.length} élément${selectedItems.length > 1 ? 's' : ''}` : 'Aucun élément'}
+            </h2>
+
+            {selectedItems.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-white/10 rounded-3xl">
+                <div className="text-4xl mb-3 opacity-30">🎵</div>
+                <p className="text-gray-600">Importez ou recherchez pour ajouter des éléments</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {selectedItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="group bg-white/[0.02] border border-white/10 hover:border-white/20 rounded-2xl p-3 transition-all duration-300 hover:bg-white/[0.04]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={item.image}
+                          className="w-16 h-16 rounded-xl bg-black/50 object-cover"
+                          alt="cover"
+                        />
+                        <div className="absolute -top-1 -left-1 w-5 h-5 bg-[#00e054] rounded-full flex items-center justify-center text-black text-[10px] font-bold">
+                          {index + 1}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0 pt-1">
+                        <div className="font-semibold text-sm mb-0.5 truncate flex items-center gap-2">
+                          {item.name}
+                          {item.type === 'song' && (
+                            <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 font-bold">SONG</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">{item.artist}</div>
+                      </div>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all duration-300 p-1.5 hover:bg-red-500/10 rounded-lg"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </form>
-        </div>
-        {/* --- Liste Items, horizontale sur mobile si > 4 --- */}
-        <div className={`overflow-x-auto ${selectedItems.length > 4 ? 'pb-4' : ''}` + " " + "space-y-2 mb-24"}>
-          <div className={`flex flex-col gap-2 min-w-[290px]" + (selectedItems.length > 4 ? ' sm:flex-row sm:gap-3' : '')}`}>
-            {selectedItems.length === 0 ? (
-              <div className="text-center py-10 border-2 border-dashed border-gray-800 rounded-xl text-gray-600 bg-white/5 backdrop-blur-xl">Liste vide. Importez ou ajoutez des titres.</div>
-            ) : (
-              selectedItems.map((item, index) => (
-                <div key={item.id} className="flex items-center justify-between bg-white/10 backdrop-blur-lg p-3 rounded-xl border border-white/15 group hover:border-[#00e054]/30 transition shadow-md min-w-[270px]">
-                  <div className="flex items-center gap-3">
-                    <div className="text-gray-600 font-mono w-6 text-center text-sm">{index + 1}</div>
-                    <img src={item.image} className="w-12 h-12 rounded-lg bg-black" alt="cover"/>
-                    <div>
-                      <div className="font-bold text-white flex items-center gap-2 text-sm">
-                        {item.name}
-                        {item.type === 'song' && <span className="text-[9px] bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded text-gray-400 font-bold">SONG</span>}
-                      </div>
-                      <div className="text-xs text-gray-400">{item.artist}</div>
-                    </div>
-                  </div>
-                  <button onClick={() => removeItem(item.id)} className="text-gray-500 hover:text-red-500 p-2 transition">✕</button>
-                </div>
-              ))
-            )}
           </div>
-        </div>
-        {/* --- Bouton Publier Sticky --- */}
-        <div className="fixed bottom-2 left-0 right-0 flex justify-center pointer-events-none z-30 md:static md:pt-0">
-          <button onClick={saveList} disabled={isSaving || selectedItems.length === 0} className="pointer-events-auto bg-[#00e054] text-black font-bold px-6 md:px-12 py-3 md:py-4 rounded-full hover:bg-[#00c04b] disabled:opacity-50 transition-all duration-300 hover:scale-105 shadow-[0_0_30px_rgba(0,224,84,0.3)] hover:shadow-[0_0_40px_rgba(0,224,84,0.4)]">
-            {isSaving ? 'Création...' : `Publier la liste (${selectedItems.length})`}
-          </button>
+
         </div>
       </div>
+
+      {/* Floating Publish Button */}
+      <div className="fixed bottom-6 md:bottom-8 left-0 right-0 flex justify-center items-center z-40 px-4">
+        <button
+          onClick={saveList}
+          disabled={isSaving || selectedItems.length === 0}
+          className="group relative bg-gradient-to-r from-[#00e054] to-[#00c04b] text-black font-bold px-12 py-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(0,224,84,0.4)] shadow-[0_0_30px_rgba(0,224,84,0.2)]"
+        >
+          <div className="flex items-center gap-3">
+            {isSaving ? (
+              <>
+                <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                <span>Création en cours...</span>
+              </>
+            ) : (
+              <>
+                <span>Publier la liste</span>
+                {selectedItems.length > 0 && (
+                  <span className="bg-black/20 px-2.5 py-1 rounded-full text-sm font-black">
+                    {selectedItems.length}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </button>
+      </div>
+
     </div>
   );
 }

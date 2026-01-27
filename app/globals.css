@@ -7,19 +7,9 @@
 html {
   /* Bloque le scroll horizontal au niveau racine */
   overflow-x: hidden;
-  /* Fixe la hauteur pour éviter les sauts */
-  height: 100%;
 }
 
 body {
-  /* Empêche le rebond élastique (Rubber banding) sur iOS */
-  overscroll-behavior-y: none;
-  overscroll-behavior-x: none; /* Bloque le rebond horizontal */
-  
-  /* Empêche le zoom et le scroll horizontal involontaire sur tout le corps */
-  /* 'pan-y' signifie : on autorise seulement le scroll vertical */
-  touch-action: pan-y;
-  
   /* Couleur de fond pour éviter les flashs blancs */
   background-color: #050505;
   

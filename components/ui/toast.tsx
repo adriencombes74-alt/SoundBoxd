@@ -42,12 +42,12 @@ export function Toast({ message, type = 'info', isVisible, onClose, duration = 3
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 400, damping: 25 }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl backdrop-blur-md"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl backdrop-blur-md bg-[#1a1a1a]/90 border border-white/10"
         >
           <div className={`${bgColors[type]} p-1 rounded-full shadow-lg`}>
             {icons[type]}
           </div>
-          <span className={`text-sm font-bold ${type === 'success' ? 'text-black' : 'text-white'}`}>
+          <span className="text-sm font-bold text-white">
             {message}
           </span>
         </motion.div>

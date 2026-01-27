@@ -14,16 +14,16 @@ export default function AlbumClientPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
-  
+
   const [albumId, setAlbumId] = useState<string | null>(null);
   const [album, setAlbum] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
-  
+
   // États Critiques
   const [reviews, setReviews] = useState<any[]>([]);
   const [displayedReviews, setDisplayedReviews] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
-  
+
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -54,112 +54,134 @@ export default function AlbumClientPage() {
 
   useEffect(() => {
     const checkSpotify = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data } = await supabase.from('user_integrations').select('id').eq('user_id', user.id).eq('provider', 'spotify').single();
-            if (data) setSpotifyConnected(true);
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('user_integrations').select('id').eq('user_id', user.id).eq('provider', 'spotify').single();
+        if (data) setSpotifyConnected(true);
+      }
     };
     checkSpotify();
   }, []);
 
-  const handleSpotifyLike = async (track: any) => {
+  const handleLike = async (track: any) => {
     if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
-    if (!spotifyConnected) {
-        if(confirm("Liez votre compte Spotify pour sauvegarder des titres. Aller aux réglages ?")) {
-            router.push('/settings/connections');
-        }
-        return;
+
+    // 1. Like sur MusicBoxd (Supabase)
+    try {
+      // Vérifier si déjà liké (pour toggle éventuellement, mais ici on ajoute)
+      const { error: sbError } = await supabase.from('likes').insert({
+        user_id: currentUser.id,
+        review_id: null, // C'est un track, pas une review
+        track_id: String(track.trackId),
+        track_name: track.trackName,
+        artist_name: track.artistName,
+        album_id: String(album.collectionId),
+        album_name: album.collectionName,
+        album_image: album.artworkUrl100
+      });
+
+      if (sbError) {
+        console.error("Supabase Like Error:", sbError);
+        // On continue quand même vers Spotify ? Ou on arrête ?
+        // Continuons pour l'UX
+      }
+    } catch (e) {
+      console.error(e);
     }
 
-    try {
+    // 2. Like sur Spotify (si connecté)
+    if (spotifyConnected) {
+      try {
         const res = await fetch('/api/spotify/actions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                action: 'like',
-                query: `${track.trackName} ${track.artistName}` 
-            })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            action: 'like',
+            query: `${track.trackName} ${track.artistName}`
+          })
         });
 
         if (res.ok) {
-            showToast(`"${track.trackName}" liké sur Spotify !`, "success");
+          showToast(`"${track.trackName}" liké sur Spotify & MusicBoxd !`, "success");
         } else {
-            const err = await res.json();
-            console.error(err);
-            showToast("Erreur lors de l'ajout sur Spotify.", "error");
+          showToast("Liké sur MusicBoxd, mais erreur Spotify.", "info");
         }
-    } catch (error) {
+      } catch (error) {
         console.error(error);
-        showToast("Erreur de connexion.", "error");
+        showToast("Liké sur MusicBoxd (Erreur connexion Spotify).", "info");
+      }
+    } else {
+      showToast("Liké sur MusicBoxd !", "success");
+      // Optionnel : Proposer de connecter Spotify
+      // if(confirm(...))
     }
   };
 
   const fetchPlaylists = async () => {
-      setLoadingPlaylists(true);
-      try {
-          const res = await fetch('/api/spotify/actions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  userId: currentUser.id,
-                  action: 'getPlaylists'
-              })
-          });
-          const data = await res.json();
-          if (data.success) {
-              setPlaylists(data.playlists);
-          } else {
-              showToast("Impossible de charger les playlists", "error");
-          }
-      } catch (error) {
-          console.error(error);
-          showToast("Erreur lors du chargement des playlists", "error");
+    setLoadingPlaylists(true);
+    try {
+      const res = await fetch('/api/spotify/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          action: 'getPlaylists'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPlaylists(data.playlists);
+      } else {
+        showToast("Impossible de charger les playlists", "error");
       }
-      setLoadingPlaylists(false);
+    } catch (error) {
+      console.error(error);
+      showToast("Erreur lors du chargement des playlists", "error");
+    }
+    setLoadingPlaylists(false);
   };
 
   const openPlaylistModal = async (track: any) => {
     if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
     if (!spotifyConnected) {
-        if(confirm("Liez votre compte Spotify pour gérer vos playlists. Aller aux réglages ?")) {
-            router.push('/settings/connections');
-        }
-        return;
+      if (confirm("Liez votre compte Spotify pour gérer vos playlists. Aller aux réglages ?")) {
+        router.push('/settings/connections');
+      }
+      return;
     }
-    
+
     setSelectedTrackForPlaylist(track);
     setShowPlaylistModal(true);
     if (playlists.length === 0) {
-        await fetchPlaylists();
+      await fetchPlaylists();
     }
   };
 
   const handleAddToPlaylist = async (playlistId: string) => {
-      if (!selectedTrackForPlaylist) return;
+    if (!selectedTrackForPlaylist) return;
 
-      try {
-        const res = await fetch('/api/spotify/actions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                action: 'addToPlaylist',
-                playlistId,
-                query: `${selectedTrackForPlaylist.trackName} ${selectedTrackForPlaylist.artistName}`
-            })
-        });
+    try {
+      const res = await fetch('/api/spotify/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          action: 'addToPlaylist',
+          playlistId,
+          query: `${selectedTrackForPlaylist.trackName} ${selectedTrackForPlaylist.artistName}`
+        })
+      });
 
-        if (res.ok) {
-            showToast("Ajouté à la playlist !", "success");
-            setShowPlaylistModal(false);
-        } else {
-            showToast("Erreur lors de l'ajout", "error");
-        }
+      if (res.ok) {
+        showToast("Ajouté à la playlist !", "success");
+        setShowPlaylistModal(false);
+      } else {
+        showToast("Erreur lors de l'ajout", "error");
+      }
     } catch (error) {
-        console.error(error);
-        showToast("Erreur de connexion", "error");
+      console.error(error);
+      showToast("Erreur de connexion", "error");
     }
   };
 
@@ -196,19 +218,19 @@ export default function AlbumClientPage() {
 
     let followingIds: string[] = [];
     if (user) {
-        const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
-        followingIds = follows?.map((f:any) => f.following_id) || [];
+      const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
+      followingIds = follows?.map((f: any) => f.following_id) || [];
     }
 
     // 1. Récupération (Jointure simple pour robustesse)
     let { data, error } = await supabase
       .from('reviews')
-      .select('*, profiles(id, username, avatar_url)') 
+      .select('*, profiles(id, username, avatar_url)')
       .eq('album_id', id);
 
     if (error || !data) {
-        const simpleRes = await supabase.from('reviews').select('*').eq('album_id', id);
-        data = simpleRes.data;
+      const simpleRes = await supabase.from('reviews').select('*').eq('album_id', id);
+      data = simpleRes.data;
     }
 
     const allReviews = data || [];
@@ -216,26 +238,26 @@ export default function AlbumClientPage() {
     // 2. Tri : Amis en premier
     const friendsReviews = allReviews.filter((r: any) => r.profiles && followingIds.includes(r.profiles.id));
     let otherReviews = allReviews.filter((r: any) => !r.profiles || !followingIds.includes(r.profiles.id));
-    
+
     otherReviews.sort(() => Math.random() - 0.5);
     const sortedReviews = [...friendsReviews, ...otherReviews];
 
     setReviews(sortedReviews);
-    
+
     // 3. Filtre et Limite
-    const albumOnlyReviews = sortedReviews.filter((r:any) => !r.track_id);
+    const albumOnlyReviews = sortedReviews.filter((r: any) => !r.track_id);
     setDisplayedReviews(albumOnlyReviews.slice(0, 3));
   };
 
   const handleShowAll = () => {
     setShowAll(true);
-    setDisplayedReviews(reviews.filter((r:any) => !r.track_id));
+    setDisplayedReviews(reviews.filter((r: any) => !r.track_id));
   };
 
   // --- CALCUL DES MOYENNES ---
   const getAverageRating = (trackId: string | null = null) => {
-    const targetReviews = reviews.filter((r: any) => 
-        trackId ? r.track_id === String(trackId) : (!r.track_id)
+    const targetReviews = reviews.filter((r: any) =>
+      trackId ? r.track_id === String(trackId) : (!r.track_id)
     );
     if (targetReviews.length === 0) return null;
     const sum = targetReviews.reduce((acc, r) => acc + r.rating, 0);
@@ -255,35 +277,35 @@ export default function AlbumClientPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        setIsSaving(false);
-        if(confirm("Connectez-vous pour noter !")) window.location.href='/login';
-        return;
+      setIsSaving(false);
+      if (confirm("Connectez-vous pour noter !")) window.location.href = '/login';
+      return;
     }
 
     const pseudo = user.email?.split('@')[0] || 'Utilisateur';
     const isTrackReview = ratingTarget !== 'album';
 
     const newReview = {
-        album_id: albumId,
-        album_name: album.collectionName,
-        artist_name: album.artistName,
-        album_image: album.artworkUrl100.replace('100x100', '1000x1000'), // HD
-        rating: userRating,
-        review_text: reviewText,
-        user_name: pseudo,
-        user_id: user.id,
-        track_id: isTrackReview ? String(ratingTarget.trackId) : null,
-        track_name: isTrackReview ? ratingTarget.trackName : null
+      album_id: albumId,
+      album_name: album.collectionName,
+      artist_name: album.artistName,
+      album_image: album.artworkUrl100.replace('100x100', '1000x1000'), // HD
+      rating: userRating,
+      review_text: reviewText,
+      user_name: pseudo,
+      user_id: user.id,
+      track_id: isTrackReview ? String(ratingTarget.trackId) : null,
+      track_name: isTrackReview ? ratingTarget.trackName : null
     };
 
     const { error } = await supabase.from('reviews').insert(newReview);
 
     setIsSaving(false);
     if (error) {
-        alert("Erreur : " + error.message);
+      alert("Erreur : " + error.message);
     } else {
-        setIsModalOpen(false);
-        fetchReviewsAndUser(albumId!);
+      setIsModalOpen(false);
+      fetchReviewsAndUser(albumId!);
     }
   };
 
@@ -361,12 +383,12 @@ export default function AlbumClientPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
-      
-      <Toast 
-        message={toast.msg} 
-        type={toast.type} 
-        isVisible={toast.visible} 
-        onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
+
+      <Toast
+        message={toast.msg}
+        type={toast.type}
+        isVisible={toast.visible}
+        onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
 
       {/* GLOWS */}
@@ -374,32 +396,32 @@ export default function AlbumClientPage() {
       <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="fixed top-4 left-0 right-0 flex justify-center z-50 px-2 md:px-4">
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
         <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
-            <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-            <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
-                <Link href="/search" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">←</span> <span className="hidden sm:inline">Albums</span>
-                </Link>
-                <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
-                </Link>
-                <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-                    <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
-                </Link>
-                <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
-                {playingTrack && (
-                    <div className="flex items-center gap-2 text-[#00e054] animate-pulse">
-                        <span className="text-lg">🎵</span>
-                        <span className="hidden sm:inline">Lecture</span>
-                    </div>
-                )}
-                {currentUser ? (
-                    <ProfileMenu user={currentUser} />
-                ) : (
-                    <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
-                )}
-            </div>
+          <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+          <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+            <Link href="/search" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">←</span> <span className="hidden sm:inline">Albums</span>
+            </Link>
+            <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
+            </Link>
+            <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
+            </Link>
+            <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+            {playingTrack && (
+              <div className="flex items-center gap-2 text-[#00e054] animate-pulse">
+                <span className="text-lg">🎵</span>
+                <span className="hidden sm:inline">Lecture</span>
+              </div>
+            )}
+            {currentUser ? (
+              <ProfileMenu user={currentUser} />
+            ) : (
+              <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -409,200 +431,196 @@ export default function AlbumClientPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-[#050505]/40"></div>
 
         <div className="relative z-10 max-w-6xl mx-auto w-full px-4 md:px-6 py-8 md:py-12 flex flex-col md:flex-row gap-6 md:gap-10 items-center md:items-end">
-            <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden bg-black flex-shrink-0 group">
-                <img src={highResImage} className="w-full h-full object-cover" />
-                {albumAvg && (
-                    <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/80 backdrop-blur-md text-[#00e054] px-2 py-1 md:px-3 md:py-1 rounded-full font-black text-lg md:text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
-                        <span>★</span> {albumAvg}
-                    </div>
-                )}
+          <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden bg-black flex-shrink-0 group">
+            <img src={highResImage} className="w-full h-full object-cover" />
+            {albumAvg && (
+              <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/80 backdrop-blur-md text-[#00e054] px-2 py-1 md:px-3 md:py-1 rounded-full font-black text-lg md:text-2xl border border-[#00e054]/30 shadow-lg flex items-center gap-1">
+                <span>★</span> {albumAvg}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 mb-4 md:mb-6 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2">
+              <span className="bg-[#00e054] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Album</span>
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">{album.primaryGenreName}</span>
             </div>
-            
-            <div className="flex-1 mb-4 md:mb-6 text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2">
-                    <span className="bg-[#00e054] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Album</span>
-                    <span className="text-gray-400 text-xs font-bold uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">{album.primaryGenreName}</span>
-                </div>
-                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black text-white mb-3 md:mb-4 leading-tight md:leading-none tracking-tight drop-shadow-2xl">{album.collectionName}</h1>
-                <div className="text-gray-300 text-base md:text-xl font-light flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-4">
-                    <Link href={`/artist/${album.artistId}`} className="text-white font-bold hover:text-[#00e054] transition hover:underline decoration-2 underline-offset-4">{album.artistName}</Link>
-                    <span className="text-gray-600">•</span>
-                    <span>{new Date(album.releaseDate).getFullYear()}</span>
-                </div>
+            <h1 className="text-3xl md:text-5xl lg:text-7xl font-black text-white mb-3 md:mb-4 leading-tight md:leading-none tracking-tight drop-shadow-2xl">{album.collectionName}</h1>
+            <div className="text-gray-300 text-base md:text-xl font-light flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-4">
+              <Link href={`/artist/${album.artistId}`} className="text-white font-bold hover:text-[#00e054] transition hover:underline decoration-2 underline-offset-4">{album.artistName}</Link>
+              <span className="text-gray-600">•</span>
+              <span>{new Date(album.releaseDate).getFullYear()}</span>
             </div>
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-16 relative z-10">
-        
+
         {/* GAUCHE : ACTIONS */}
         <div className="lg:col-span-4 space-y-6 md:space-y-8">
-            <button onClick={() => openRatingModal('album')} className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-3 md:py-4 rounded-2xl transition uppercase tracking-widest text-xs md:text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-2 md:gap-3">
-                <span className="text-lg md:text-xl">★</span> Noter l'Album
-            </button>
+          <button onClick={() => openRatingModal('album')} className="w-full bg-[#00e054] hover:bg-[#00c04b] hover:scale-[1.02] text-black font-black py-3 md:py-4 rounded-2xl transition uppercase tracking-widest text-xs md:text-sm shadow-[0_0_30px_rgba(0,224,84,0.2)] flex items-center justify-center gap-2 md:gap-3">
+            <span className="text-lg md:text-xl">★</span> Noter l'Album
+          </button>
 
-            <ListenMenu 
-              spotifyUrl={spotifySearchUrl}
-              youtubeUrl={youtubeSearchUrl}
-              appleMusicUrl={appleMusicUrl}
-            />
+          <ListenMenu
+            spotifyUrl={spotifySearchUrl}
+            youtubeUrl={youtubeSearchUrl}
+            appleMusicUrl={appleMusicUrl}
+          />
 
-            {/* SECTION AVIS */}
-            <div className="bg-[#121212] p-4 md:p-6 rounded-3xl border border-white/5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 md:mb-6 pb-2 border-b border-white/5 flex justify-between">
-                    <span>Avis Album</span>
-                    <span className="text-white">{reviews.filter((r:any) => !r.track_id).length}</span>
-                </h3>
-                
-                {displayedReviews.length === 0 ? (
-                    <div className="text-center py-8">
-                        <p className="text-gray-600 text-sm italic">Aucun avis pour l'instant.</p>
+          {/* SECTION AVIS */}
+          <div className="bg-[#121212] p-4 md:p-6 rounded-3xl border border-white/5">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 md:mb-6 pb-2 border-b border-white/5 flex justify-between">
+              <span>Avis Album</span>
+              <span className="text-white">{reviews.filter((r: any) => !r.track_id).length}</span>
+            </h3>
+
+            {displayedReviews.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600 text-sm italic">Aucun avis pour l'instant.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {displayedReviews.map((review) => (
+                  <div key={review.id} className="bg-[#1a1a1a] p-4 rounded-xl border border-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-[10px] font-bold text-white border border-white/10 overflow-hidden">
+                          {review.profiles?.avatar_url ? <img src={review.profiles.avatar_url} className="w-full h-full object-cover rounded-full" /> : (review.user_name?.[0] || '?')}
+                        </div>
+                        <Link href={`/profile-view?u=${review.user_name}`} className="font-bold text-xs text-gray-300 hover:text-white transition">{review.user_name}</Link>
+                      </div>
+                      <div className="text-[#00e054] text-xs tracking-widest">{"★".repeat(review.rating)}</div>
                     </div>
-                ) : (
-                    <div className="space-y-4">
-                        {displayedReviews.map((review) => (
-                            <div key={review.id} className="bg-[#1a1a1a] p-4 rounded-xl border border-white/5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-[10px] font-bold text-white border border-white/10 overflow-hidden">
-                                            {review.profiles?.avatar_url ? <img src={review.profiles.avatar_url} className="w-full h-full object-cover rounded-full" /> : (review.user_name?.[0] || '?')}
-                                        </div>
-                                        <Link href={`/profile-view?u=${review.user_name}`} className="font-bold text-xs text-gray-300 hover:text-white transition">{review.user_name}</Link>
-                                    </div>
-                                    <div className="text-[#00e054] text-xs tracking-widest">{"★".repeat(review.rating)}</div>
-                                </div>
-                                <p className="text-gray-400 text-xs leading-relaxed italic">"{review.review_text}"</p>
-                            </div>
-                        ))}
-                        {!showAll && reviews.filter((r:any) => !r.track_id).length > 3 && (
-                            <button onClick={handleShowAll} className="w-full py-2 mt-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition border border-dashed border-white/10 rounded hover:border-white/30">
-                                + Voir la suite
-                            </button>
-                        )}
-                    </div>
+                    <p className="text-gray-400 text-xs leading-relaxed italic">"{review.review_text}"</p>
+                  </div>
+                ))}
+                {!showAll && reviews.filter((r: any) => !r.track_id).length > 3 && (
+                  <button onClick={handleShowAll} className="w-full py-2 mt-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition border border-dashed border-white/10 rounded hover:border-white/30">
+                    + Voir la suite
+                  </button>
                 )}
-            </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* COLONNE DROITE : PISTES */}
         <div className="lg:col-span-8">
-            <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-8 border-b border-white/10 pb-3 md:pb-4 flex flex-col md:flex-row justify-between md:items-center gap-2">
-                <span>Pistes de l'album</span>
-                <span className="text-[9px] md:text-[10px] text-[#00e054] bg-[#00e054]/10 px-2 py-1 rounded">Cliquez sur ★ pour noter</span>
-            </h2>
-            
-            <div className="space-y-1 md:space-y-2">
-                {tracks.map((track, index) => {
-                    const trackAvg = getAverageRating(track.trackId);
-                    return (
-                        <div key={track.trackId} className={`flex items-center gap-2 md:gap-3 p-2 md:p-4 rounded-xl md:rounded-2xl transition group border ${
-                            playingTrack === track.trackId.toString()
-                                ? 'bg-[#00e054]/10 border-[#00e054]/30'
-                                : 'hover:bg-white/5 border-transparent hover:border-white/5'
-                        }`}>
-                            <span className={`w-6 md:w-8 font-mono text-xs md:text-sm font-bold flex-shrink-0 ${
-                                playingTrack === track.trackId.toString()
-                                    ? 'text-[#00e054]'
-                                    : 'text-gray-600 group-hover:text-[#00e054]'
-                            }`}>{index + 1}</span>
-                            
-                            <div className="flex-1 min-w-0">
-                                <button
-                                    onClick={() => handlePlayTrack(track)}
-                                    className={`font-bold truncate text-sm md:text-lg text-left hover:cursor-pointer w-full ${
-                                        playingTrack === track.trackId.toString()
-                                            ? 'text-[#00e054]'
-                                            : 'text-gray-300 group-hover:text-white'
-                                    }`}
-                                    title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
-                                >
-                                    {track.trackName}
-                                    {playingTrack === track.trackId.toString() && (
-                                        <span className="ml-1 md:ml-2 text-xs opacity-70">🎵</span>
-                                    )}
-                                </button>
-                            </div>
+          <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-8 border-b border-white/10 pb-3 md:pb-4 flex flex-col md:flex-row justify-between md:items-center gap-2">
+            <span>Pistes de l'album</span>
+            <span className="text-[9px] md:text-[10px] text-[#00e054] bg-[#00e054]/10 px-2 py-1 rounded">Cliquez sur ★ pour noter</span>
+          </h2>
 
-                            <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
-                                {/* SPOTIFY ACTIONS */}
-                                <div className="flex gap-1 md:gap-2 mr-2 border-r border-white/10 pr-2 md:pr-4">
-                                  <motion.button 
-                                      onClick={() => handleSpotifyLike(track)} 
-                                      className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-[#00e054] hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all" 
-                                      title="Liker sur Spotify"
-                                      whileHover={{ scale: 1.1 }}
-                                      whileTap={{ scale: 0.95 }}
-                                  >
-                                      <Heart className="w-4 h-4" />
-                                  </motion.button>
-                                  <motion.button 
-                                      onClick={() => openPlaylistModal(track)} 
-                                      className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all" 
-                                      title="Ajouter à une playlist"
-                                      whileHover={{ scale: 1.1 }}
-                                      whileTap={{ scale: 0.95 }}
-                                  >
-                                      <ListPlus className="w-4 h-4" />
-                                  </motion.button>
-                                </div>
+          <div className="space-y-1 md:space-y-2">
+            {tracks.map((track, index) => {
+              const trackAvg = getAverageRating(track.trackId);
+              return (
+                <div key={track.trackId} className={`flex items-center gap-2 md:gap-3 p-2 md:p-4 rounded-xl md:rounded-2xl transition group border ${playingTrack === track.trackId.toString()
+                    ? 'bg-[#00e054]/10 border-[#00e054]/30'
+                    : 'hover:bg-white/5 border-transparent hover:border-white/5'
+                  }`}>
+                  <span className={`w-6 md:w-8 font-mono text-xs md:text-sm font-bold flex-shrink-0 ${playingTrack === track.trackId.toString()
+                      ? 'text-[#00e054]'
+                      : 'text-gray-600 group-hover:text-[#00e054]'
+                    }`}>{index + 1}</span>
 
-                                {trackAvg && (
-                                    <div className="flex items-center gap-0.5 md:gap-1 text-xs md:text-sm font-black text-[#00e054] bg-[#00e054]/10 px-1.5 md:px-3 py-0.5 md:py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
-                                        <span className="text-[10px] md:text-xs opacity-70">★</span> {trackAvg}
-                                    </div>
-                                )}
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => handlePlayTrack(track)}
+                      className={`font-bold truncate text-sm md:text-lg text-left hover:cursor-pointer w-full ${playingTrack === track.trackId.toString()
+                          ? 'text-[#00e054]'
+                          : 'text-gray-300 group-hover:text-white'
+                        }`}
+                      title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
+                    >
+                      {track.trackName}
+                      {playingTrack === track.trackId.toString() && (
+                        <span className="ml-1 md:ml-2 text-xs opacity-70">🎵</span>
+                      )}
+                    </button>
+                  </div>
 
-                                {/* BOUTON PLAY/PAUSE */}
-                                <motion.button
-                                    onClick={() => handlePlayTrack(track)}
-                                    className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
-                                        playingTrack === track.trackId.toString()
-                                            ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)]'
-                                            : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)]'
-                                    }`}
-                                    title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.95 }}
-                                >
-                                    {playingTrack === track.trackId.toString() ? (
-                                        <motion.svg 
-                                            className="w-3.5 h-3.5 md:w-4 md:h-4" 
-                                            fill="currentColor" 
-                                            viewBox="0 0 24 24"
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ type: "spring", stiffness: 400 }}
-                                        >
-                                            <rect x="6" y="4" width="4" height="16" rx="1" />
-                                            <rect x="14" y="4" width="4" height="16" rx="1" />
-                                        </motion.svg>
-                                    ) : (
-                                        <svg className="w-3.5 h-3.5 md:w-4 md:h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z" />
-                                        </svg>
-                                    )}
-                                </motion.button>
+                  <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+                    {/* SPOTIFY ACTIONS */}
+                    <div className="flex gap-1 md:gap-2 mr-2 border-r border-white/10 pr-2 md:pr-4">
+                      <motion.button
+                        onClick={() => handleLike(track)}
+                        className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-[#00e054] hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all"
+                        title="Liker (MusicBoxd + Spotify)"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <Heart className="w-4 h-4" />
+                      </motion.button>
+                      <motion.button
+                        onClick={() => openPlaylistModal(track)}
+                        className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all"
+                        title="Ajouter à une playlist"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <ListPlus className="w-4 h-4" />
+                      </motion.button>
+                    </div>
 
-                                {/* BOUTON NOTER */}
-                                <motion.button 
-                                    onClick={() => openRatingModal(track)} 
-                                    className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 text-amber-400 hover:bg-amber-500 hover:text-black flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]" 
-                                    title="Noter ce titre"
-                                    whileHover={{ scale: 1.1, rotate: 15 }}
-                                    whileTap={{ scale: 0.95 }}
-                                >
-                                    <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                    </svg>
-                                </motion.button>
-                                
-                                {/* DURÉE - Cachée sur très petit écran */}
-                                <span className="hidden sm:block text-[10px] md:text-xs text-gray-600 font-mono w-8 md:w-10 text-right flex-shrink-0">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+                    {trackAvg && (
+                      <div className="flex items-center gap-0.5 md:gap-1 text-xs md:text-sm font-black text-[#00e054] bg-[#00e054]/10 px-1.5 md:px-3 py-0.5 md:py-1 rounded-full shadow-[0_0_15px_rgba(0,224,84,0.1)]">
+                        <span className="text-[10px] md:text-xs opacity-70">★</span> {trackAvg}
+                      </div>
+                    )}
+
+                    {/* BOUTON PLAY/PAUSE */}
+                    <motion.button
+                      onClick={() => handlePlayTrack(track)}
+                      className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${playingTrack === track.trackId.toString()
+                          ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)]'
+                          : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)]'
+                        }`}
+                      title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {playingTrack === track.trackId.toString() ? (
+                        <motion.svg
+                          className="w-3.5 h-3.5 md:w-4 md:h-4"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 400 }}
+                        >
+                          <rect x="6" y="4" width="4" height="16" rx="1" />
+                          <rect x="14" y="4" width="4" height="16" rx="1" />
+                        </motion.svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5 md:w-4 md:h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      )}
+                    </motion.button>
+
+                    {/* BOUTON NOTER */}
+                    <motion.button
+                      onClick={() => openRatingModal(track)}
+                      className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 text-amber-400 hover:bg-amber-500 hover:text-black flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                      title="Noter ce titre"
+                      whileHover={{ scale: 1.1, rotate: 15 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                    </motion.button>
+
+                    {/* DURÉE - Cachée sur très petit écran */}
+                    <span className="hidden sm:block text-[10px] md:text-xs text-gray-600 font-mono w-8 md:w-10 text-right flex-shrink-0">{Math.floor(track.trackTimeMillis / 60000)}:{((track.trackTimeMillis % 60000) / 1000).toFixed(0).padStart(2, '0')}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
       </main>
@@ -610,22 +628,22 @@ export default function AlbumClientPage() {
       {/* MODALE DE NOTATION */}
       <AnimatePresence>
         {isModalOpen && (
-          <motion.div 
+          <motion.div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <motion.div 
+            <motion.div
               className="absolute inset-0 bg-black/60 backdrop-blur-xl"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
             />
-            
-            <motion.div 
+
+            <motion.div
               className="relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] p-6 md:p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/50 overflow-hidden"
               initial={{ opacity: 0, scale: 0.9, y: 50 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -633,9 +651,9 @@ export default function AlbumClientPage() {
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
               <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#00e054]/20 rounded-full blur-3xl pointer-events-none" />
-              
+
               <div className="flex justify-between items-center mb-4 relative z-10">
-                <motion.h2 
+                <motion.h2
                   className="text-xl md:text-2xl font-black text-white"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -643,8 +661,8 @@ export default function AlbumClientPage() {
                 >
                   Noter {ratingTarget === 'album' ? "l'album" : "le titre"}
                 </motion.h2>
-                <motion.button 
-                  onClick={() => setIsModalOpen(false)} 
+                <motion.button
+                  onClick={() => setIsModalOpen(false)}
                   className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
                   whileHover={{ scale: 1.1, rotate: 90 }}
                   whileTap={{ scale: 0.9 }}
@@ -652,9 +670,9 @@ export default function AlbumClientPage() {
                   ✕
                 </motion.button>
               </div>
-              
+
               {ratingTarget !== 'album' && (
-                <motion.p 
+                <motion.p
                   className="text-[#00e054] text-sm font-bold mb-6 uppercase tracking-wide border-l-2 border-[#00e054] pl-3"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -664,29 +682,28 @@ export default function AlbumClientPage() {
                 </motion.p>
               )}
 
-              <motion.div 
+              <motion.div
                 className="flex justify-center mb-6 gap-1 md:gap-2 bg-white/[0.03] backdrop-blur-lg p-4 md:p-5 rounded-2xl border border-white/5"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
                 {[1, 2, 3, 4, 5].map((star, index) => (
-                  <motion.button 
-                    key={star} 
-                    onClick={() => setUserRating(star)} 
+                  <motion.button
+                    key={star}
+                    onClick={() => setUserRating(star)}
                     onMouseEnter={() => setUserRating(star)}
-                    className={`text-4xl md:text-5xl focus:outline-none ${
-                      star <= userRating 
-                        ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]' 
+                    className={`text-4xl md:text-5xl focus:outline-none ${star <= userRating
+                        ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]'
                         : 'text-gray-700 hover:text-gray-500'
-                    }`}
+                      }`}
                     initial={{ opacity: 0, scale: 0, rotate: -180 }}
-                    animate={{ 
-                      opacity: 1, 
-                      scale: star <= userRating ? 1.1 : 1, 
-                      rotate: 0 
+                    animate={{
+                      opacity: 1,
+                      scale: star <= userRating ? 1.1 : 1,
+                      rotate: 0
                     }}
-                    transition={{ 
+                    transition={{
                       delay: 0.25 + index * 0.05,
                       type: "spring",
                       stiffness: 400,
@@ -699,10 +716,10 @@ export default function AlbumClientPage() {
                   </motion.button>
                 ))}
               </motion.div>
-              
+
               <AnimatePresence>
                 {userRating > 0 && (
-                  <motion.div 
+                  <motion.div
                     className="text-center mb-4"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -730,28 +747,27 @@ export default function AlbumClientPage() {
                 transition={{ delay: 0.3 }}
               />
 
-              <motion.div 
+              <motion.div
                 className="flex gap-3"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 }}
               >
-                <motion.button 
-                  onClick={() => setIsModalOpen(false)} 
+                <motion.button
+                  onClick={() => setIsModalOpen(false)}
                   className="px-5 py-3 text-gray-400 hover:text-white text-sm font-bold transition rounded-xl hover:bg-white/5"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
                   Annuler
                 </motion.button>
-                <motion.button 
-                  onClick={handleSaveReview} 
+                <motion.button
+                  onClick={handleSaveReview}
                   disabled={isSaving || userRating === 0}
-                  className={`flex-1 py-3 font-black rounded-xl uppercase tracking-widest text-sm transition-all ${
-                    userRating > 0 
-                      ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20' 
+                  className={`flex-1 py-3 font-black rounded-xl uppercase tracking-widest text-sm transition-all ${userRating > 0
+                      ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20'
                       : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                  }`}
+                    }`}
                   whileHover={userRating > 0 ? { scale: 1.02 } : {}}
                   whileTap={userRating > 0 ? { scale: 0.98 } : {}}
                 >
@@ -774,54 +790,54 @@ export default function AlbumClientPage() {
       {/* MODALE PLAYLIST */}
       <AnimatePresence>
         {showPlaylistModal && (
-            <motion.div 
-              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={() => setShowPlaylistModal(false)} />
+            <motion.div
+              className="relative bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
             >
-              <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={() => setShowPlaylistModal(false)} />
-              <motion.div 
-                className="relative bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden"
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-              >
-                <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                    <h3 className="font-bold text-white">Ajouter à une playlist</h3>
-                    <button onClick={() => setShowPlaylistModal(false)} className="text-gray-400 hover:text-white">✕</button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-2">
-                    {loadingPlaylists ? (
-                        <div className="text-center py-8 text-gray-500">Chargement...</div>
-                    ) : (
-                        <div className="space-y-1">
-                            {playlists.map(playlist => (
-                                <button
-                                    key={playlist.id}
-                                    onClick={() => handleAddToPlaylist(playlist.id)}
-                                    className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition text-left group"
-                                >
-                                    {playlist.images?.[0]?.url ? (
-                                        <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" />
-                                    ) : (
-                                        <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">{playlist.name}</div>
-                                        <div className="text-xs text-gray-500">{playlist.tracks?.total || 0} titres</div>
-                                    </div>
-                                    <div className="opacity-0 group-hover:opacity-100 text-[#00e054]">
-                                        <Check className="w-5 h-5" />
-                                    </div>
-                                </button>
-                            ))}
+              <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                <h3 className="font-bold text-white">Ajouter à une playlist</h3>
+                <button onClick={() => setShowPlaylistModal(false)} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2">
+                {loadingPlaylists ? (
+                  <div className="text-center py-8 text-gray-500">Chargement...</div>
+                ) : (
+                  <div className="space-y-1">
+                    {playlists.map(playlist => (
+                      <button
+                        key={playlist.id}
+                        onClick={() => handleAddToPlaylist(playlist.id)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition text-left group"
+                      >
+                        {playlist.images?.[0]?.url ? (
+                          <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">{playlist.name}</div>
+                          <div className="text-xs text-gray-500">{playlist.tracks?.total || 0} titres</div>
                         </div>
-                    )}
-                </div>
-              </motion.div>
+                        <div className="opacity-0 group-hover:opacity-100 text-[#00e054]">
+                          <Check className="w-5 h-5" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
