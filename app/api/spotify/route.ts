@@ -35,49 +35,49 @@ async function getSpotifyToken() {
 
 // Fonction de "Matching" : Cherche un titre Spotify sur iTunes
 async function matchWithItunes(trackName: string, artistName: string) {
-    try {
-        // Nettoyer et préparer la requête
-        const query = `${trackName.trim()} ${artistName.trim()}`.substring(0, 100);
-        const res = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`,
-            {
-                headers: {
-                    'User-Agent': 'MusicBoxd-App/1.0'
-                }
-            }
-        );
-
-        if (!res.ok) {
-            console.warn(`Erreur iTunes pour "${trackName}" de ${artistName}: ${res.status}`);
-            return null;
+  try {
+    // Nettoyer et préparer la requête
+    const query = `${trackName.trim()} ${artistName.trim()}`.substring(0, 100);
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`,
+      {
+        headers: {
+          'User-Agent': 'MusicBoxd-App/1.0'
         }
+      }
+    );
 
-        const data = await res.json();
-
-        if (data.results && data.results.length > 0) {
-            const item = data.results[0];
-
-            // Vérifier que les champs essentiels sont présents
-            if (!item.trackName || !item.artistName) {
-                return null;
-            }
-
-            return {
-                id: item.trackId || item.collectionId,
-                targetId: item.collectionId || item.trackId,
-                name: item.trackName,
-                artist: item.artistName,
-                image: item.artworkUrl100 ? item.artworkUrl100.replace('100x100', '600x600') : '',
-                type: 'song' as const,
-                year: item.releaseDate ? new Date(item.releaseDate).getFullYear() : undefined
-            };
-        }
-
-        return null;
-    } catch (error) {
-        console.warn(`Erreur lors du matching "${trackName}" de ${artistName}:`, error);
-        return null;
+    if (!res.ok) {
+      console.warn(`Erreur iTunes pour "${trackName}" de ${artistName}: ${res.status}`);
+      return null;
     }
+
+    const data = await res.json();
+
+    if (data.results && data.results.length > 0) {
+      const item = data.results[0];
+
+      // Vérifier que les champs essentiels sont présents
+      if (!item.trackName || !item.artistName) {
+        return null;
+      }
+
+      return {
+        id: item.trackId || item.collectionId,
+        targetId: item.collectionId || item.trackId,
+        name: item.trackName,
+        artist: item.artistName,
+        image: item.artworkUrl100 ? item.artworkUrl100.replace('100x100', '600x600') : '',
+        type: 'song' as const,
+        year: item.releaseDate ? new Date(item.releaseDate).getFullYear() : undefined
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`Erreur lors du matching "${trackName}" de ${artistName}:`, error);
+    return null;
+  }
 }
 
 // Types pour TypeScript
@@ -127,40 +127,51 @@ export async function POST(request: Request) {
     // 2. Obtenir le token Spotify
     const token = await getSpotifyToken();
 
-    // 3. Récupérer les tracks de la playlist Spotify
-    const spotifyRes = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50&fields=items(track(name,artists(name)))`,
-      {
+    // 3. Récupérer TOUTES les tracks de la playlist Spotify via pagination
+    let allTracks: SpotifyTrack[] = [];
+    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(name,artists(name))),next`;
+
+    while (nextUrl) {
+      const spotifyRes: Response = await fetch(nextUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
-      }
-    );
+      });
 
-    if (!spotifyRes.ok) {
-      if (spotifyRes.status === 404) {
-        return NextResponse.json(
-          { error: "Playlist introuvable ou privée" },
-          { status: 404 }
-        );
+      if (!spotifyRes.ok) {
+        if (spotifyRes.status === 404) {
+          return NextResponse.json(
+            { error: "Playlist introuvable ou privée" },
+            { status: 404 }
+          );
+        }
+        throw new Error(`Erreur Spotify API: ${spotifyRes.status} ${spotifyRes.statusText}`);
       }
-      throw new Error(`Erreur Spotify API: ${spotifyRes.status} ${spotifyRes.statusText}`);
+
+      const spotifyData: { items?: SpotifyTrack[]; next?: string | null } = await spotifyRes.json();
+
+      if (!spotifyData.items || !Array.isArray(spotifyData.items)) {
+        break;
+      }
+
+      allTracks.push(...spotifyData.items);
+      nextUrl = spotifyData.next || null;
+
+      console.log(`Récupéré ${allTracks.length} titres jusqu'à présent...`);
     }
 
-    const spotifyData = await spotifyRes.json();
-
-    if (!spotifyData.items || !Array.isArray(spotifyData.items)) {
+    if (allTracks.length === 0) {
       return NextResponse.json(
         { error: "Aucun titre trouvé dans cette playlist" },
         { status: 404 }
       );
     }
 
-    console.log(`${spotifyData.items.length} titres trouvés dans la playlist`);
+    console.log(`${allTracks.length} titres trouvés au total dans la playlist`);
 
     // 4. Préparer les tracks à matcher
-    const tracksToMatch = spotifyData.items
+    const tracksToMatch = allTracks
       .filter((item: SpotifyTrack) =>
         item.track &&
         item.track.name &&
@@ -194,11 +205,11 @@ export async function POST(request: Request) {
       );
 
       const batchResults = await Promise.all(promises);
-      const validResults = batchResults.filter((result): result is MatchedTrack => result !== null);
+      const validResults = batchResults.filter((result) => result !== null) as MatchedTrack[];
 
       foundTracks.push(...validResults);
 
-      console.log(`Lot ${Math.floor(i/batchSize) + 1}: ${validResults.length}/${batch.length} titres matchés`);
+      console.log(`Lot ${Math.floor(i / batchSize) + 1}: ${validResults.length}/${batch.length} titres matchés`);
 
       // Délai entre les lots (sauf le dernier)
       if (i + batchSize < tracksToMatch.length) {

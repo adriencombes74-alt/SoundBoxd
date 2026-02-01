@@ -104,7 +104,7 @@ export default function CommunityPage() {
             <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
             {/* --- FOND ALBUM ICÔNIQUE (THE DARK SIDE OF THE MOON) --- */}
-            <div className="absolute top-0 inset-x-0 h-[70vh] w-full z-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-0 inset-x-0 h-[50vh] md:h-[70vh] w-full z-0 overflow-hidden pointer-events-none">
                 <img src="https://upload.wikimedia.org/wikipedia/en/3/3b/Dark_Side_of_the_Moon.png"
                     className="w-full h-full object-cover blur-[10px] scale-125 opacity-70 animate-in fade-in duration-1000"
                     alt="The Dark Side of the Moon cover" />
@@ -133,12 +133,12 @@ export default function CommunityPage() {
                 </nav>
             </div>
 
-            <div className="relative z-10 max-w-4xl mx-auto px-6 pt-32 md:pt-40 pb-20 flex flex-col items-center justify-center min-h-[60vh]">
-                <div className="text-center mb-16">
-                    <h1 className="text-5xl md:text-6xl font-black mb-6 tracking-tight text-white">
+            <div className="relative z-10 max-w-4xl mx-auto px-4 md:px-6 pt-20 md:pt-32 lg:pt-40 pb-12 md:pb-20 flex flex-col items-center justify-center min-h-[50vh] md:min-h-[60vh]">
+                <div className="text-center mb-8 md:mb-16">
+                    <h1 className="text-3xl md:text-5xl lg:text-6xl font-black mb-4 md:mb-6 tracking-tight text-white">
                         La <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00e054] to-emerald-500">Communauté</span>
                     </h1>
-                    <p className="text-gray-400 text-lg max-w-xl mx-auto leading-relaxed mb-8">
+                    <p className="text-gray-400 text-sm md:text-lg max-w-sm md:max-w-xl mx-auto leading-relaxed mb-6 md:mb-8 px-2">
                         Trouvez vos amis, découvrez de nouveaux curateurs musicaux et partagez vos découvertes.
                     </p>
 
@@ -146,7 +146,7 @@ export default function CommunityPage() {
                     {user && (Capacitor.isNativePlatform() || true) && ( // Enlever '|| true' en prod si on veut strict mobile
                         <button
                             onClick={() => { setShowSyncModal(true); setPermissionStep('intro'); }}
-                            className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-6 py-3 rounded-full font-bold transition flex items-center gap-2 mx-auto backdrop-blur-md"
+                            className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-full font-bold transition flex items-center gap-1.5 md:gap-2 mx-auto backdrop-blur-md text-sm md:text-base"
                         >
                             <span>📱</span> Trouver mes contacts
                         </button>
@@ -154,20 +154,20 @@ export default function CommunityPage() {
                 </div>
 
                 {/* BARRE DE RECHERCHE */}
-                <form onSubmit={searchUsers} className="relative group max-w-2xl mx-auto mb-20 w-full">
+                <form onSubmit={searchUsers} className="relative group max-w-2xl mx-auto mb-12 md:mb-20 w-full">
                     <div className="absolute -inset-1 bg-gradient-to-r from-[#00e054] to-blue-600 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
                     <div className="relative flex items-center">
                         <input
                             type="text"
-                            placeholder="Rechercher un membre par pseudo..."
-                            className="w-full px-4 md:px-8 py-4 md:py-5 pr-36 rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-200 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] text-lg focus:outline-none focus:border-[#00e054]/50"
+                            placeholder="Rechercher un membre..."
+                            className="w-full px-4 md:px-8 py-3 md:py-5 pr-28 md:pr-36 rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-200 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] text-sm md:text-lg focus:outline-none focus:border-[#00e054]/50"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                         />
                         <button
                             type="submit"
                             disabled={loading}
-                            className="absolute right-2 bg-[#00e054] text-black font-bold px-6 py-2.5 rounded-full hover:bg-[#00c04b] transition disabled:opacity-50 hover:scale-105 shadow-lg shadow-green-900/20"
+                            className="absolute right-2 bg-[#00e054] text-black font-bold px-4 md:px-6 py-2 md:py-2.5 rounded-full hover:bg-[#00c04b] transition disabled:opacity-50 hover:scale-105 shadow-lg shadow-green-900/20 text-sm md:text-base"
                         >
                             {loading ? '...' : 'Chercher'}
                         </button>
@@ -175,31 +175,31 @@ export default function CommunityPage() {
                 </form>
 
                 {/* RÉSULTATS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 w-full">
                     {hasSearched && results.length === 0 && !loading && (
-                        <div className="col-span-full text-center py-16 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
-                            <p className="text-gray-500 text-lg">Aucun membre trouvé avec ce pseudo.</p>
+                        <div className="col-span-full text-center py-10 md:py-16 border border-dashed border-white/10 rounded-2xl md:rounded-3xl bg-white/[0.02]">
+                            <p className="text-gray-500 text-base md:text-lg">Aucun membre trouvé avec ce pseudo.</p>
                         </div>
                     )}
 
                     {results.map((profile) => (
                         <Link key={profile.id} href={`/profile-view?u=${profile.username}`} className="group block">
-                            <div className="flex items-center justify-between bg-[#121212] p-6 rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                                <div className="flex items-center gap-5">
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-2xl font-black text-black overflow-hidden border-2 border-[#14181c] shadow-lg group-hover:scale-110 transition duration-300">
+                            <div className="flex items-center justify-between bg-[#121212] p-4 md:p-6 rounded-xl md:rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+                                <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
+                                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg md:text-2xl font-black text-black overflow-hidden border-2 border-[#14181c] shadow-lg group-hover:scale-110 transition duration-300 flex-shrink-0">
                                         {profile.avatar_url ? (
                                             <img src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
                                         ) : (
                                             (profile.username && profile.username[0]) ? profile.username[0].toUpperCase() : '?'
                                         )}
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-white text-xl group-hover:text-[#00e054] transition mb-1">{profile.username || 'Utilisateur'}</h3>
-                                        <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Membre</p>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="font-bold text-white text-base md:text-xl group-hover:text-[#00e054] transition mb-0.5 md:mb-1 truncate">{profile.username || 'Utilisateur'}</h3>
+                                        <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Membre</p>
                                     </div>
                                 </div>
 
-                                <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-gray-500 group-hover:border-[#00e054] group-hover:text-[#00e054] group-hover:bg-[#00e054]/10 transition">
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white/10 flex items-center justify-center text-gray-500 group-hover:border-[#00e054] group-hover:text-[#00e054] group-hover:bg-[#00e054]/10 transition flex-shrink-0">
                                     ➜
                                 </div>
                             </div>
@@ -210,16 +210,16 @@ export default function CommunityPage() {
 
             {/* --- MODALE DE SYNCHRONISATION --- */}
             {showSyncModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-[#181818] border border-white/10 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-[#181818] border border-white/10 rounded-2xl md:rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
 
                         {permissionStep === 'intro' ? (
-                            <div className="p-8 text-center">
-                                <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">
+                            <div className="p-6 md:p-8 text-center">
+                                <div className="w-14 h-14 md:w-16 md:h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 text-2xl md:text-3xl">
                                     👥
                                 </div>
-                                <h2 className="text-2xl font-black text-white mb-4">Retrouvez vos amis</h2>
-                                <p className="text-gray-400 text-sm leading-relaxed mb-8">
+                                <h2 className="text-xl md:text-2xl font-black text-white mb-3 md:mb-4">Retrouvez vos amis</h2>
+                                <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-6 md:mb-8">
                                     Pour voir qui est déjà sur MusicBoxd, nous avons besoin d'accéder à vos contacts.
                                     <br /><br />
                                     Les numéros seront envoyés de manière sécurisée pour trouver des correspondances et ne seront pas stockés.
@@ -228,13 +228,13 @@ export default function CommunityPage() {
                                     <button
                                         onClick={handleSyncContacts}
                                         disabled={isSyncing}
-                                        className="bg-[#00e054] text-black font-bold py-3.5 rounded-xl hover:bg-[#00c549] transition flex items-center justify-center gap-2"
+                                        className="bg-[#00e054] text-black font-bold py-3 md:py-3.5 rounded-xl hover:bg-[#00c549] transition flex items-center justify-center gap-2 text-sm md:text-base"
                                     >
                                         {isSyncing ? 'Recherche...' : 'Continuer'}
                                     </button>
                                     <button
                                         onClick={() => setShowSyncModal(false)}
-                                        className="text-gray-500 hover:text-white py-2 text-sm font-bold transition"
+                                        className="text-gray-500 hover:text-white py-2 text-xs md:text-sm font-bold transition"
                                     >
                                         Plus tard
                                     </button>
@@ -242,32 +242,32 @@ export default function CommunityPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col max-h-[70vh]">
-                                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#181818] z-10">
-                                    <h3 className="font-bold text-white text-lg">Amis suggérés ({suggestions.length})</h3>
-                                    <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                                <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-[#181818] z-10">
+                                    <h3 className="font-bold text-white text-base md:text-lg">Amis suggérés ({suggestions.length})</h3>
+                                    <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-white text-xl md:text-2xl leading-none">&times;</button>
                                 </div>
 
-                                <div className="overflow-y-auto p-4 space-y-2 flex-1">
+                                <div className="overflow-y-auto p-3 md:p-4 space-y-2 flex-1">
                                     {suggestions.length > 0 ? (
                                         <>
-                                            <p className="text-gray-400 text-xs text-center mb-4">Ces contacts sont déjà sur MusicBoxd, voulez-vous les suivre ?</p>
+                                            <p className="text-gray-400 text-[10px] md:text-xs text-center mb-3 md:mb-4">Ces contacts sont déjà sur MusicBoxd, voulez-vous les suivre ?</p>
                                             {suggestions.map(suggestion => (
-                                                <div key={suggestion.id} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold overflow-hidden">
+                                                <div key={suggestion.id} className="flex items-center justify-between bg-white/5 p-2.5 md:p-3 rounded-lg md:rounded-xl border border-white/5">
+                                                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                                                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs md:text-sm font-bold overflow-hidden flex-shrink-0">
                                                             {suggestion.avatar_url ? (
                                                                 <img src={suggestion.avatar_url} className="w-full h-full object-cover" />
                                                             ) : (
                                                                 suggestion.username[0].toUpperCase()
                                                             )}
                                                         </div>
-                                                        <div>
-                                                            <div className="font-bold text-white text-sm">{suggestion.username}</div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-bold text-white text-xs md:text-sm truncate">{suggestion.username}</div>
                                                         </div>
                                                     </div>
                                                     <button
                                                         onClick={() => handleFollowSuggestion(suggestion.id)}
-                                                        className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full hover:bg-[#00e054] transition"
+                                                        className="bg-white text-black text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition flex-shrink-0"
                                                     >
                                                         Suivre
                                                     </button>
@@ -275,8 +275,8 @@ export default function CommunityPage() {
                                             ))}
                                         </>
                                     ) : (
-                                        <div className="py-12 text-center text-gray-500">
-                                            <p>Aucun nouvel ami trouvé dans vos contacts.</p>
+                                        <div className="py-8 md:py-12 text-center text-gray-500">
+                                            <p className="text-sm md:text-base">Aucun nouvel ami trouvé dans vos contacts.</p>
                                         </div>
                                     )}
                                 </div>

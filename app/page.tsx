@@ -200,7 +200,7 @@ export default function Home() {
                     />
                     {/* Afficher la note seulement si elle existe et > 0 */}
                     {review.rating && review.rating > 0 && (
-                        <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-[#5d00e0]">
+                        <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-[#00e054]">
                             ★ {review.rating}
                         </div>
                     )}
@@ -208,7 +208,7 @@ export default function Home() {
                 <div className="p-3 md:p-4 flex flex-col flex-1">
                     {/* Titre de l'album/chanson */}
                     <h3 className="font-bold text-white text-sm truncate mb-1">{review.track_name || review.album_name}</h3>
-                    {review.track_name && <span className="text-[10px] text-[#c600e0] uppercase font-bold mb-1 block">Chanson</span>}
+                    {review.track_name && <span className="text-[10px] text-[#00e054] uppercase font-bold mb-1 block">Chanson</span>}
 
                     {/* AVIS OU COMMENTAIRE DE L'UTILISATEUR - Affiché directement */}
                     {displayText && (
@@ -235,7 +235,7 @@ export default function Home() {
                         <div className="flex gap-2 md:gap-3 text-xs text-gray-500">
                             <button
                                 onClick={() => handleLike(review)}
-                                className={`flex items-center gap-1 hover:text-white transition ${myLikes.has(review.id) ? 'text-pink-500' : ''}`}
+                                className={`flex items-center gap-1 hover:text-white transition ${myLikes.has(review.id) ? 'text-[#00e054]' : ''}`}
                             >
                                 <span>{myLikes.has(review.id) ? '♥' : '♡'}</span> {review.like_count || 0}
                             </button>
@@ -262,27 +262,27 @@ export default function Home() {
                     alt={item.name}
                     className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500 group-hover:scale-110"
                 />
-                <div className="absolute top-2 left-2 w-8 h-8 bg-[#ff08ce] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
+                <div className="absolute top-2 left-2 w-8 h-8 bg-[#00e054] text-black font-black flex items-center justify-center rounded-full shadow-lg z-10">
                     #{rank}
                 </div>
                 {type === 'song' && (
-                    <div className="absolute top-2 right-2 bg-black/80 text-[#ff08ce] text-[10px] px-2 py-1 rounded-full font-bold shadow-lg backdrop-blur-sm">
+                    <div className="absolute top-2 right-2 bg-black/80 text-[#00e054] text-[10px] px-2 py-1 rounded-full font-bold shadow-lg backdrop-blur-sm">
                         ♫
                     </div>
                 )}
                 <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 to-transparent pt-10">
-                    <div className="flex items-center gap-1 text-[#ff08ce] font-bold text-lg">
+                    <div className="flex items-center gap-1 text-[#00e054] font-bold text-lg">
                         <span>★</span> {item.average.toFixed(1)}
                     </div>
                 </div>
             </div>
-            <h3 className="font-bold text-white truncate group-hover:text-[#74416cce] transition">{item.name}</h3>
+            <h3 className="font-bold text-white truncate group-hover:text-[#00e054] transition">{item.name}</h3>
             <p className="text-xs text-gray-500 truncate">{item.artist}</p>
         </Link>
     );
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#ff08ce] selection:text-black pb-20 overflow-x-hidden">
+        <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
 
             <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
 
@@ -294,20 +294,20 @@ export default function Home() {
     shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]
 ">
                     <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
-                        Music<span className="text-[#ff08ce]">Boxd</span>
+                        Music<span className="text-[#00e054]">Boxd</span>
                     </Link>
                     <div className="hidden md:flex items-center gap-3 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
-                        <Link href="/discover" className="hover:text-[#ff08ce] transition flex items-center gap-1 md:gap-2">
+                        <Link href="/discover" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
                             <span className="text-base md:text-lg">⚡</span> <span className="hidden sm:inline">Découvrir</span>
                         </Link>
-                        <Link href="/lists/create" className="hover:text-[#ff08ce] transition flex items-center gap-1 md:gap-2">
+                        <Link href="/lists/create" className="hover:text-[#00e054] transition flex items-center gap-1 md:gap-2">
                             <span className="text-base md:text-lg">📥</span> <span className="hidden sm:inline">Importer</span>
                         </Link>
-                        <Link href="/community" className="hover:text-[#ff08ce] transition hidden md:inline">Communauté</Link>
+                        <Link href="/community" className="hover:text-[#00e054] transition hidden md:inline">Communauté</Link>
                         {user ? (
                             <ProfileMenu user={user} />
                         ) : (
-                            <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#ff08ce] transition text-[10px] md:text-sm">Connexion</Link>
+                            <Link href="/login" className="bg-white text-black px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition text-[10px] md:text-sm">Connexion</Link>
                         )}
                     </div>
                 </nav>
@@ -316,7 +316,7 @@ export default function Home() {
             {/* HERO */}
             <header className="relative pt-12 md:pt-40 pb-8 md:pb-10 px-4 md:px-6 flex flex-col items-center text-center z-10">
                 <h1 className="text-3xl md:text-5xl lg:text-8xl font-black tracking-tight mb-4 md:mb-6 leading-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
-                    <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden" /><span className="text-[#117775]">MUSIQUE.</span>
+                    <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden" /><span className="text-[#00e054]">MUSIQUE.</span>
                 </h1>
 
                 <p className="text-base md:text-lg text-gray-400 max-w-sm md:max-w-xl mb-6 md:mb-8 font-light px-2">
@@ -324,7 +324,7 @@ export default function Home() {
                 </p>
 
                 <div className="w-full max-w-sm md:max-w-md relative group mb-6 md:mb-8">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#ff08ce] to-blue-600 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00e054] to-emerald-600 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
                     <Link href="/search" className="relative flex items-center bg-black rounded-full px-4 md:px-6 py-3 md:py-4 w-full hover:bg-[#111] transition">
                         <span className="text-gray-500 mr-2 md:mr-3 text-lg">🔍</span>
                         <span className="text-gray-400 text-xs md:text-sm">Chercher un album, un artiste...</span>
@@ -337,14 +337,14 @@ export default function Home() {
                 {/* 1. PARCOURIR PAR GENRE */}
                 <section>
                     <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-6 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-[#e000af] rounded-full"></span> Parcourir par Genre
+                        <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-[#00e054] rounded-full"></span> Parcourir par Genre
                     </h2>
                     <div className="flex gap-3 md:gap-6 overflow-x-auto py-8 -my-6 px-1 scrollbar-hide">
                         {genres.map((genre) => (
                             <Link
                                 key={genre}
                                 href={`/search?q=${genre}&type=album`}
-                                className="flex-shrink-0 whitespace-nowrap px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#ff08ce] hover:text-[#ff08ce] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-105 hover:z-50 relative hover:shadow-lg hover:bg-[#202020]"
+                                className="flex-shrink-0 whitespace-nowrap px-6 py-3 bg-[#1a1a1a] border border-white/5 hover:border-[#00e054] hover:text-[#00e054] rounded-full text-xs md:text-sm font-bold transition-all hover:scale-105 hover:z-50 relative hover:shadow-lg hover:bg-[#202020]"
                             >
                                 {genre}
                             </Link>
@@ -446,7 +446,7 @@ export default function Home() {
                         ) : (
                             <div className="text-center py-8 md:py-12 border border-dashed border-white/10 rounded-2xl mx-2 md:mx-0">
                                 <p className="text-gray-500 mb-2 text-sm md:text-base">Vos amis n&apos;ont rien posté récemment.</p>
-                                <Link href="/community" className="text-[#ff08ce] hover:underline font-bold text-sm">Trouver des gens à suivre →</Link>
+                                <Link href="/community" className="text-[#00e054] hover:underline font-bold text-sm">Trouver des gens à suivre →</Link>
                             </div>
                         )}
                         {friendReviews.length > limitFriends && (
@@ -536,7 +536,7 @@ export default function Home() {
                                             </Link>
                                             <div className="flex-1">
                                                 <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/15 rounded-2xl px-3 py-2 md:px-4 md:py-3 shadow-lg shadow-black/20 hover:bg-white/[0.12] transition-all duration-300">
-                                                    <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-[10px] md:text-xs font-bold text-white mb-1 block hover:text-[#ff08ce] transition">{c.profiles?.username}</Link>
+                                                    <Link href={`/profile-view?u=${c.profiles?.username}`} className="text-[10px] md:text-xs font-bold text-white mb-1 block hover:text-[#00e054] transition">{c.profiles?.username}</Link>
                                                     <div className="text-[10px] md:text-xs text-gray-300 leading-relaxed">{c.content}</div>
                                                     <div className="text-[8px] md:text-[10px] text-gray-500 mt-1">
                                                         {new Date(c.created_at).toLocaleDateString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -587,7 +587,7 @@ export default function Home() {
                                 </div>
                                 <motion.button
                                     onClick={postComment}
-                                    className="bg-[#ff08ce] hover:bg-[#ff08ce]/80 text-black px-4 py-3 rounded-full font-bold text-sm md:text-base shadow-lg shadow-[#00e054]/20 hover:shadow-xl hover:shadow-[#00e054]/30 transition-all duration-300"
+                                    className="bg-[#00e054] hover:bg-[#00e054]/80 text-black px-4 py-3 rounded-full font-bold text-sm md:text-base shadow-lg shadow-[#00e054]/20 hover:shadow-xl hover:shadow-[#00e054]/30 transition-all duration-300"
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
                                     disabled={!newComment.trim()}

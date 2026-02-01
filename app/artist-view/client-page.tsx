@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function ArtistClientPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function ArtistClientPage() {
   const [artistInfo, setArtistInfo] = useState<any>(null);
   const [albums, setAlbums] = useState<any[]>([]);
   const [topSongs, setTopSongs] = useState<any[]>([]);
+  const [showAllSongs, setShowAllSongs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
@@ -57,7 +59,7 @@ export default function ArtistClientPage() {
       setAlbums(albumsList);
 
       // 3. Top Songs
-      const songsRes = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=song&limit=5`);
+      const songsRes = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=song&limit=50`);
       const songsData = await songsRes.json();
 
       const songsList = songsData.results.filter((item: any) => item.wrapperType === 'track');
@@ -99,7 +101,7 @@ export default function ArtistClientPage() {
       </div>
 
       {/* --- HEADER ARTISTE --- */}
-      <header className="relative w-full h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a]">
+      <header className="relative w-full h-[300px] md:h-[400px] lg:h-[500px] flex items-end overflow-hidden border-b border-white/5 bg-[#0a0a0a] pt-16 md:pt-0">
         {/* Fond flouté */}
         {heroImage && (
           <>
@@ -108,55 +110,74 @@ export default function ArtistClientPage() {
           </>
         )}
 
-        <div className="relative z-10 max-w-6xl mx-auto w-full px-6 py-12 flex flex-col md:flex-row gap-10 items-end">
+        <div className="relative z-10 max-w-6xl mx-auto w-full px-4 md:px-6 py-6 md:py-12 flex flex-col md:flex-row gap-4 md:gap-10 items-center md:items-end">
           {/* Image "Avatar" */}
-          <div className="w-56 h-56 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] border-4 border-[#14181c] overflow-hidden bg-black flex-shrink-0 z-20 relative">
-            {heroImage ? <img src={heroImage} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl font-bold">{artistInfo.artistName[0]}</div>}
+          <div className="w-32 h-32 md:w-48 md:h-48 lg:w-56 lg:h-56 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] border-2 md:border-4 border-[#14181c] overflow-hidden bg-black flex-shrink-0 z-20 relative">
+            {heroImage ? <img src={heroImage} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl md:text-4xl font-bold">{artistInfo.artistName[0]}</div>}
           </div>
 
-          <div className="flex-1 mb-6">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="bg-[#00e054] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Artiste</span>
-              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">{artistInfo.primaryGenreName}</span>
+          <div className="flex-1 mb-2 md:mb-6 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2">
+              <span className="bg-[#00e054] text-black text-[9px] md:text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Artiste</span>
+              <span className="text-gray-400 text-[9px] md:text-xs font-bold uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">{artistInfo.primaryGenreName}</span>
             </div>
-            <h1 className="text-6xl md:text-8xl font-black text-white mb-4 leading-none tracking-tight drop-shadow-2xl">{artistInfo.artistName}</h1>
-            <div className="text-gray-300 text-lg font-light flex items-center gap-2">
+            <h1 className="text-4xl md:text-6xl lg:text-8xl font-black text-white mb-2 md:mb-4 leading-none tracking-tight drop-shadow-2xl">{artistInfo.artistName}</h1>
+            <div className="text-gray-300 text-sm md:text-lg font-light flex items-center justify-center md:justify-start gap-2">
               <span className="text-white font-bold">{albums.length}</span> Albums sortis
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-16 relative z-10">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-16 relative z-10">
 
         {/* COLONNE GAUCHE : TOP TITRES (4 cols) */}
-        <div className="lg:col-span-4 space-y-8">
-          <h2 className="text-sm font-bold text-[#00e054] uppercase tracking-widest border-b border-white/10 pb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-[#00e054] rounded-full"></span> Titres Populaires
+        <div className="lg:col-span-4 space-y-4 md:space-y-8">
+          <h2 className="text-xs md:text-sm font-bold text-[#00e054] uppercase tracking-widest border-b border-white/10 pb-3 md:pb-4 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-[#00e054] rounded-full"></span> Titres Populaires
           </h2>
-          <div className="space-y-2">
-            {topSongs.map((song, i) => (
-              <div key={song.trackId} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition group cursor-default border border-transparent hover:border-white/5">
-                <span className="text-gray-600 font-mono w-6 text-center group-hover:text-[#00e054] font-bold text-lg">{i + 1}</span>
-                <img src={song.artworkUrl100} className="w-12 h-12 rounded-lg bg-black shadow-md" />
+          <div className="space-y-1.5 md:space-y-2">
+            {(showAllSongs ? topSongs : topSongs.slice(0, 5)).map((song, i) => (
+              <div key={song.trackId} className="flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg md:rounded-xl hover:bg-white/5 transition group cursor-default border border-transparent hover:border-white/5">
+                <span className="text-gray-600 font-mono w-5 md:w-6 text-center group-hover:text-[#00e054] font-bold text-sm md:text-lg">{i + 1}</span>
+                <img src={song.artworkUrl100} className="w-10 h-10 md:w-12 md:h-12 rounded-md md:rounded-lg bg-black shadow-md" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-white truncate group-hover:text-[#00e054] transition">{song.trackName}</div>
-                  <div className="text-xs text-gray-500 truncate">{song.collectionName}</div>
+                  <div className="text-xs md:text-sm font-bold text-white truncate group-hover:text-[#00e054] transition">{song.trackName}</div>
+                  <div className="text-[10px] md:text-xs text-gray-500 truncate">{song.collectionName}</div>
                 </div>
               </div>
             ))}
+
+            {topSongs.length > 5 && (
+              <button
+                onClick={() => setShowAllSongs(!showAllSongs)}
+                className="w-full mt-3 md:mt-4 py-2 md:py-3 flex items-center justify-center gap-2 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white hover:bg-white/5 rounded-lg md:rounded-xl transition duration-300"
+              >
+                {showAllSongs ? (
+                  <>
+                    <ChevronUp className="w-4 h-4" />
+                    Voir moins
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4" />
+                    Voir les {topSongs.length - 5} autres titres
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
         {/* COLONNE DROITE : DISCOGRAPHIE (8 cols) */}
         <div className="lg:col-span-8">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-8 border-b border-white/10 pb-4">
+          <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
             Discographie Complète
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {albums.map((album) => (
               <Link key={album.collectionId} href={`/album-view?id=${album.collectionId}`} className="group block">
-                <div className="relative aspect-square mb-4 overflow-hidden rounded-2xl bg-[#121212] shadow-lg border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300">
+                <div className="relative aspect-square mb-2 md:mb-4 overflow-hidden rounded-xl md:rounded-2xl bg-[#121212] shadow-lg border border-white/5 group-hover:border-[#00e054]/50 transition-all duration-300">
                   <img
                     src={album.artworkUrl100.replace('100x100', '400x400')}
                     alt={album.collectionName}
@@ -164,13 +185,13 @@ export default function ArtistClientPage() {
                   />
                   {/* Overlay au survol */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                    <span className="bg-[#00e054] text-black text-xs font-bold px-3 py-1 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition duration-300">Voir</span>
+                    <span className="bg-[#00e054] text-black text-[10px] md:text-xs font-bold px-2 md:px-3 py-1 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition duration-300">Voir</span>
                   </div>
                 </div>
-                <h3 className="text-sm font-bold text-white leading-tight truncate group-hover:text-[#00e054] transition">
+                <h3 className="text-xs md:text-sm font-bold text-white leading-tight truncate group-hover:text-[#00e054] transition">
                   {album.collectionName}
                 </h3>
-                <p className="text-xs text-gray-500 mt-1 font-mono tracking-wide">
+                <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 md:mt-1 font-mono tracking-wide">
                   {new Date(album.releaseDate).getFullYear()}
                 </p>
               </Link>

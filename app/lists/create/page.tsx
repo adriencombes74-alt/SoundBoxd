@@ -145,7 +145,7 @@ export default function CreateListPage() {
     if (!query.trim()) return;
     setIsSearching(true);
     try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${searchType}&limit=5`);
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=${searchType}&limit=50`);
       const data = await res.json();
       setSearchResults(data.results);
     } catch (err) { console.error(err); }

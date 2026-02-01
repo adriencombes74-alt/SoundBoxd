@@ -101,7 +101,7 @@ function SearchContent() {
           .from('lists')
           .select('*')
           .ilike('title', `%${searchQuery}%`)
-          .limit(20);
+          .limit(100);
 
         if (error) console.error("Erreur playlists:", error);
         setResults(playlists || []);

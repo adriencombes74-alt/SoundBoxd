@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import ProfileMenu from '@/components/ui/profile-menu';
+import { Toast, ToastType } from '@/components/ui/toast';
+import { Heart, ListPlus, Check } from 'lucide-react';
 
 export default function ListDetailsClientPage() {
   const router = useRouter();
@@ -16,6 +19,42 @@ export default function ListDetailsClientPage() {
   const [owner, setOwner] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // État pour la lecture audio
+  const [playingTrack, setPlayingTrack] = useState<string | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+
+  // Spotify Integration
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [toast, setToast] = useState<{ msg: string, type: ToastType, visible: boolean }>({ msg: '', type: 'info', visible: false });
+
+  // Playlists
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedTrackForPlaylist, setSelectedTrackForPlaylist] = useState<any>(null);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
+
+  // Rating Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [ratingTarget, setRatingTarget] = useState<any>(null);
+  const [userRating, setUserRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const showToast = (msg: string, type: ToastType = 'info') => {
+    setToast({ msg, type, visible: true });
+  };
+
+  useEffect(() => {
+    const checkSpotify = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('user_integrations').select('id').eq('user_id', user.id).eq('provider', 'spotify').single();
+        if (data) setSpotifyConnected(true);
+      }
+    };
+    checkSpotify();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -71,50 +110,32 @@ export default function ListDetailsClientPage() {
     }
 
     try {
-      // Créer les en-têtes CSV
       const headers = ['Artist', 'Track Name', 'Album'];
-
-      // Créer les lignes de données
       const rows = list.albums.map((item: any) => [
         item.artist || '',
         item.name || '',
-        // Pour les albums, on peut utiliser le nom de l'album si disponible, sinon une valeur par défaut
         item.album || item.collectionName || (item.type === 'album' ? item.name : 'Album inconnu')
       ]);
 
-      // Combiner en-têtes et données
       const csvContent = [headers, ...rows]
         .map(row =>
           row.map((field: string) =>
-            // Échapper les guillemets et entourer de guillemets si nécessaire
             `"${String(field).replace(/"/g, '""')}"`
           ).join(',')
         )
         .join('\n');
 
-      // Créer le blob
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-
-      // Créer l'URL du blob
       const url = URL.createObjectURL(blob);
-
-      // Créer un élément <a> temporaire pour le téléchargement
       const link = document.createElement('a');
       link.setAttribute('href', url);
       link.setAttribute('download', `${list.title || 'playlist'}.csv`);
       link.style.visibility = 'hidden';
-
-      // Ajouter à la page, cliquer et supprimer
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      // Libérer l'URL
       URL.revokeObjectURL(url);
-
-      // Notification de succès
       alert(`Fichier CSV "${list.title || 'playlist'}.csv" téléchargé avec succès !`);
-
     } catch (error) {
       console.error('Erreur lors de l\'export CSV:', error);
       alert('Erreur lors de l\'exportation du fichier CSV.');
@@ -129,24 +150,331 @@ export default function ListDetailsClientPage() {
     }
   };
 
+  const handlePlayTrack = async (item: any) => {
+    try {
+      const trackId = item.targetId || item.id;
+
+      if (playingTrack && playingTrack !== trackId) {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+        setPlayingTrack(null);
+        setAudioElement(null);
+      }
+
+      if (playingTrack === trackId) {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+        setPlayingTrack(null);
+        setAudioElement(null);
+        return;
+      }
+
+      console.log(`🎵 Tentative de lecture: "${item.name}" (ID: ${trackId})`);
+      let previewUrl = null;
+
+      // Méthode 1: Recherche stricte par ID avec validation
+      try {
+        const response = await fetch(`https://itunes.apple.com/lookup?id=${trackId}&entity=song`);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            // Priorité absolue : Correspondance exacte de l'ID si c'est un track
+            const exactMatch = data.results.find((r: any) => String(r.trackId) === String(trackId) && r.previewUrl);
+
+            if (exactMatch) {
+              previewUrl = exactMatch.previewUrl;
+              console.log('✅ Preview exact trouvé (ID match)');
+            } else {
+              console.log(`⚠️ Pas de match exact d'ID pour trackId=${trackId}`);
+
+              // ÉTAPE INTERMÉDIAIRE: Chercher par nom de piste dans les résultats
+              if (item.name) {
+                const nameMatch = data.results.find((r: any) => {
+                  if (!r.trackName || !r.previewUrl || r.wrapperType !== 'track') return false;
+                  const trackNameLower = r.trackName.toLowerCase();
+                  const itemNameLower = item.name.toLowerCase();
+                  return trackNameLower.includes(itemNameLower) || itemNameLower.includes(trackNameLower);
+                });
+
+                if (nameMatch) {
+                  previewUrl = nameMatch.previewUrl;
+                  console.log(`✅ Match par NOM trouvé: "${nameMatch.trackName}" (trackId=${nameMatch.trackId})`);
+                }
+              }
+
+              // Si toujours rien, dernière option: première piste de l'album
+              if (!previewUrl) {
+                const firstTrack = data.results.find((r: any) => r.wrapperType === 'track' && r.previewUrl);
+                if (firstTrack) {
+                  previewUrl = firstTrack.previewUrl;
+                  console.log(`⚠️ FALLBACK: Première piste "${firstTrack.trackName}" au lieu de "${item.name}"`);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Erreur lookup ID:', e);
+      }
+
+      // Méthode 2: Recherche par nom (uniquement si Méthode 1 échoue complètement)
+      if (!previewUrl && item.name && item.artist) {
+        console.log(`🔍 Fallback recherche: "${item.name}" ${item.artist}`);
+        const searchQuery = encodeURIComponent(`${item.name} ${item.artist}`);
+        const searchRes = await fetch(`https://itunes.apple.com/search?term=${searchQuery}&entity=song&limit=1`);
+
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          if (searchData.results?.[0]?.previewUrl) {
+            // Vérification de sécurité base
+            const resName = searchData.results[0].trackName.toLowerCase();
+            const reqName = item.name.toLowerCase();
+
+            if (resName.includes(reqName) || reqName.includes(resName)) {
+              previewUrl = searchData.results[0].previewUrl;
+              console.log('✅ Preview trouvé via recherche fallback');
+            }
+          }
+        }
+      }
+
+      if (previewUrl) {
+        const audio = new Audio(previewUrl);
+        audio.volume = 0.6;
+        audio.crossOrigin = "anonymous";
+
+        audio.addEventListener('ended', () => {
+          setPlayingTrack(null);
+          setAudioElement(null);
+        });
+
+        audio.addEventListener('error', (e) => {
+          console.error('Erreur lecture:', e);
+          showToast("Lecture impossible", "error");
+          setPlayingTrack(null);
+          setAudioElement(null);
+        });
+
+        await audio.play();
+        setPlayingTrack(trackId);
+        setAudioElement(audio);
+      } else {
+        showToast("Aucun extrait disponible", "info");
+      }
+    } catch (error) {
+      console.error('Erreur play:', error);
+      showToast("Erreur lors de la lecture", "error");
+      setPlayingTrack(null);
+      setAudioElement(null);
+    }
+  };
+
+  const handleLike = async (item: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
+
+    try {
+      const { error: sbError } = await supabase.from('likes').insert({
+        user_id: currentUser.id,
+        review_id: null,
+        track_id: String(item.targetId || item.id),
+        track_name: item.name,
+        artist_name: item.artist,
+        album_id: String(item.targetId || item.id),
+        album_name: item.name,
+        album_image: item.image
+      });
+
+      if (sbError) {
+        console.error("Supabase Like Error:", sbError);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (spotifyConnected) {
+      try {
+        const res = await fetch('/api/spotify/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            action: 'like',
+            query: `${item.name} ${item.artist}`
+          })
+        });
+
+        if (res.ok) {
+          showToast(`"${item.name}" liké sur Spotify & MusicBoxd !`, "success");
+        } else {
+          showToast("Liké sur MusicBoxd, mais erreur Spotify.", "info");
+        }
+      } catch (error) {
+        console.error(error);
+        showToast("Liké sur MusicBoxd (Erreur connexion Spotify).", "info");
+      }
+    } else {
+      showToast("Liké sur MusicBoxd !", "success");
+    }
+  };
+
+  const fetchPlaylists = async () => {
+    setLoadingPlaylists(true);
+    try {
+      const res = await fetch('/api/spotify/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          action: 'getPlaylists'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPlaylists(data.playlists);
+      } else {
+        showToast("Impossible de charger les playlists", "error");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Erreur lors du chargement des playlists", "error");
+    }
+    setLoadingPlaylists(false);
+  };
+
+  const openPlaylistModal = async (item: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!currentUser) return showToast("Connectez-vous pour utiliser cette fonction !", "error");
+    if (!spotifyConnected) {
+      if (confirm("Liez votre compte Spotify pour gérer vos playlists. Aller aux réglages ?")) {
+        router.push('/settings/connections');
+      }
+      return;
+    }
+
+    setSelectedTrackForPlaylist(item);
+    setShowPlaylistModal(true);
+    if (playlists.length === 0) {
+      await fetchPlaylists();
+    }
+  };
+
+  const handleAddToPlaylist = async (playlistId: string) => {
+    if (!selectedTrackForPlaylist) return;
+
+    try {
+      const res = await fetch('/api/spotify/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          action: 'addToPlaylist',
+          playlistId,
+          query: `${selectedTrackForPlaylist.name} ${selectedTrackForPlaylist.artist}`
+        })
+      });
+
+      if (res.ok) {
+        showToast("Ajouté à la playlist !", "success");
+        setShowPlaylistModal(false);
+      } else {
+        showToast("Erreur lors de l'ajout", "error");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Erreur de connexion", "error");
+    }
+  };
+
+  const openRatingModal = (item: any, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setRatingTarget(item);
+    setUserRating(0);
+    setReviewText("");
+    setIsModalOpen(true);
+  };
+
+  const handleSaveReview = async () => {
+    if (userRating === 0) return alert("Notez !");
+    setIsSaving(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setIsSaving(false);
+      if (confirm("Connectez-vous pour noter !")) window.location.href = '/login';
+      return;
+    }
+
+    const pseudo = user.email?.split('@')[0] || 'Utilisateur';
+
+    const newReview = {
+      album_id: String(ratingTarget.targetId || ratingTarget.id),
+      album_name: ratingTarget.name,
+      artist_name: ratingTarget.artist,
+      album_image: ratingTarget.image,
+      rating: userRating,
+      review_text: reviewText,
+      user_name: pseudo,
+      user_id: user.id,
+      track_id: ratingTarget.type === 'song' ? String(ratingTarget.targetId || ratingTarget.id) : null,
+      track_name: ratingTarget.type === 'song' ? ratingTarget.name : null
+    };
+
+    const { error } = await supabase.from('reviews').insert(newReview);
+
+    setIsSaving(false);
+    if (error) {
+      alert("Erreur : " + error.message);
+    } else {
+      setIsModalOpen(false);
+      showToast("Avis publié avec succès !", "success");
+    }
+  };
+
   if (loading) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Chargement...</div>;
   if (!list) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Liste introuvable.</div>;
 
   const mosaicAlbums = list.albums?.slice(0, 12) || [];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden p-2 md:p-0">
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
+
+      <Toast
+        message={toast.msg}
+        type={toast.type}
+        isVisible={toast.visible}
+        onClose={() => setToast(prev => ({ ...prev, visible: false }))}
+      />
 
       {/* GLOWS */}
-      <div className="fixed top-[-20%] right-[-10%] w-[60%] md:w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
-      <div className="fixed bottom-[-20%] left-[-10%] w-[60%] md:w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="fixed bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
       {/* NAVBAR */}
-      <div className="hidden md:flex fixed top-4 left-2 right-2 justify-center z-50 px-2 md:px-4">
-        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] ">
-          <Link href="/" className="text-base md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
-          <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest">
-            <Link href="/search" className="text-gray-300 hover:text-[#00e054] transition">Albums</Link>
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
+        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
+          <Link href="/" className="text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+          <div className="flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
+            <Link href="/search" className="hover:text-white transition flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-base opacity-70">←</span> <span className="hidden sm:inline">Albums</span>
+            </Link>
+            {playingTrack && (
+              <div className="flex items-center gap-2 text-[#00e054] animate-pulse">
+                <span className="text-lg">🎵</span>
+                <span className="hidden sm:inline">Lecture</span>
+              </div>
+            )}
             {currentUser ? (
               <ProfileMenu user={currentUser} />
             ) : (
@@ -181,12 +509,12 @@ export default function ListDetailsClientPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:gap-4 justify-center mt-2 md:mt-10 w-full">
-            <button onClick={handleShare} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105 glassy">Partager 🔗</button>
-            <button onClick={handleExportCSV} className="px-4 md:px-6 py-2 md:py-3 bg-[#00e054]/10 hover:bg-[#00e054]/20 text-[#00e054] rounded-xl border border-[#00e054]/20 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105 glassy">Exporter CSV 📄</button>
+            <button onClick={handleShare} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Partager 🔗</button>
+            <button onClick={handleExportCSV} className="px-4 md:px-6 py-2 md:py-3 bg-[#00e054]/10 hover:bg-[#00e054]/20 text-[#00e054] rounded-xl border border-[#00e054]/20 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Exporter CSV 📄</button>
             {currentUser && currentUser.id === list.user_id && (
               <>
-                <button onClick={handleEdit} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105 glassy">Modifier ✎</button>
-                <button onClick={handleDelete} className="px-4 md:px-6 py-2 md:py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105 glassy">Supprimer 🗑️</button>
+                <button onClick={handleEdit} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Modifier ✎</button>
+                <button onClick={handleDelete} className="px-4 md:px-6 py-2 md:py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Supprimer 🗑️</button>
               </>
             )}
           </div>
@@ -195,29 +523,128 @@ export default function ListDetailsClientPage() {
 
       {/* CONTENU */}
       <main className="max-w-4xl mx-auto px-2 md:px-6 py-8 md:py-16 relative z-10">
-        <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-hide">
-          {list.albums?.map((item: any, index: number) => (
-            // Lien intelligent : targetId (AlbumID) ou id (pour compatibilité)
-            <Link key={index} href={`/album-view?id=${item.targetId || item.id}`} className="block group">
-              <div className="flex items-center gap-3 md:gap-6 p-3 md:p-4 rounded-2xl bg-white/10 backdrop-blur-lg border border-white/10 hover:border-[#00e054]/50 hover:bg-white/20 transition-all duration-300 hover:translate-x-1 shadow-lg min-w-[220px]">
-                <div className="text-gray-600 font-mono text-base md:text-xl w-8 text-center font-bold group-hover:text-[#00e054] transition">{index + 1}</div>
-                <div className="w-14 h-14 md:w-20 md:h-20 flex-shrink-0 shadow-2xl group-hover:scale-105 transition transform duration-500 relative">
-                  <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded-lg" />
+        <h2 className="text-xs md:text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 md:mb-8 border-b border-white/10 pb-3 md:pb-4">
+          Titres de la liste
+        </h2>
+
+        <div className="space-y-2">
+          {list.albums?.map((item: any, index: number) => {
+            const trackId = item.targetId || item.id;
+            const isPlaying = playingTrack === trackId;
+            const albumUrl = `/album-view?id=${trackId}`;
+
+            return (
+              <div key={index} className={`flex items-center gap-1.5 md:gap-3 p-1.5 md:p-4 rounded-lg md:rounded-2xl transition group border ${isPlaying
+                ? 'bg-[#00e054]/10 border-[#00e054]/30'
+                : 'hover:bg-white/5 border-transparent hover:border-white/5'
+                }`}>
+                {/* Index */}
+                <span className={`w-5 md:w-8 font-mono text-[10px] md:text-sm font-bold flex-shrink-0 ${isPlaying
+                  ? 'text-[#00e054]'
+                  : 'text-gray-600 group-hover:text-[#00e054]'
+                  }`}>{index + 1}</span>
+
+                {/* Image (Lien vers album-view) */}
+                <Link href={albumUrl} className="w-11 h-11 md:w-14 md:h-14 flex-shrink-0 shadow-2xl group-hover:scale-105 transition transform duration-500 relative cursor-pointer block">
+                  <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded-md md:rounded-lg" />
                   {item.type === 'song' && (
-                    <div className="absolute -bottom-2 -right-2 bg-black border border-white/10 text-[#00e054] text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg">SONG</div>
+                    <div className="absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 bg-black border border-white/10 text-[#00e054] text-[7px] md:text-[8px] px-1 md:px-1.5 py-0.5 rounded-full font-bold shadow-lg">SONG</div>
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base md:text-xl font-bold text-white group-hover:text-[#00e054] transition truncate mb-1 md:mb-0">{item.name}</h3>
-                  <div className="flex items-center gap-2 md:gap-3 text-gray-400 mt-1 text-xs md:text-sm font-medium">
-                    <span className="text-gray-300">{item.artist}</span>
-                    {item.year && <><span className="w-1 h-1 bg-gray-600 rounded-full"></span><span className="text-gray-500 font-mono">{item.year}</span></>}
+                </Link>
+
+                {/* Infos (Lien sur Titre vers album-view) */}
+                <div className="flex-1 min-w-0 px-1.5 md:px-3 max-w-[calc(100%-150px)] md:max-w-none">
+                  <Link href={albumUrl} className="block">
+
+                    <h3 className={`font-bold truncate text-xs md:text-lg cursor-pointer hover:underline underline-offset-2 ${isPlaying
+                      ? 'text-[#00e054]'
+                      : 'text-gray-300 hover:text-[#00e054]'
+                      }`}>
+                      {item.name}
+                      {isPlaying && (
+                        <span className="ml-1 md:ml-2 text-[10px] md:text-xs opacity-70">🎵</span>
+                      )}
+                    </h3>
+                  </Link>
+                  <div className="flex items-center gap-1.5 md:gap-3 text-gray-400 mt-0.5 md:mt-1 text-[10px] md:text-sm font-medium">
+                    <span className="text-gray-300 truncate max-w-[120px] md:max-w-none">{item.artist}</span>
+                    {item.year && <><span className="hidden md:inline w-1 h-1 bg-gray-600 rounded-full"></span><span className="hidden md:inline text-gray-500 font-mono">{item.year}</span></>}
                   </div>
                 </div>
-                <div className="text-gray-600 opacity-0 group-hover:opacity-100 transition pr-2 md:pr-4 transform group-hover:translate-x-2">➜</div>
+
+                <div className="flex items-center gap-0.5 md:gap-2 flex-shrink-0">
+                  {/* ACTIONS - Always visible */}
+                  <div className="flex gap-1 md:gap-2 mr-1 md:mr-2 border-r border-white/10 pr-1 md:pr-4">
+                    <motion.button
+                      onClick={(e) => handleLike(item, e)}
+                      className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/5 text-gray-400 hover:text-[#00e054] hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all"
+                      title="Liker (MusicBoxd + Spotify)"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Heart className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={(e) => openPlaylistModal(item, e)}
+                      className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 flex items-center justify-center flex-shrink-0 transition-all"
+                      title="Ajouter à une playlist"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <ListPlus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    </motion.button>
+                  </div>
+
+                  {/* BOUTON PLAY/PAUSE - Always visible on mobile, hover on desktop */}
+                  <motion.button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayTrack(item);
+                    }}
+                    className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 ${isPlaying
+                      ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)] opacity-100'
+                      : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)] opacity-100 md:opacity-0'
+                      }`}
+                    title={isPlaying ? "Arrêter" : "Écouter un extrait"}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    {isPlaying ? (
+                      <motion.svg
+                        className="w-3.5 h-3.5 md:w-4 md:h-4"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                      </motion.svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 md:w-4 md:h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </motion.button>
+
+
+                  {/* BOUTON NOTER - Always visible */}
+                  <motion.button
+                    onClick={(e) => openRatingModal(item, e)}
+                    className="flex w-7 h-7 md:w-9 md:h-9 rounded-full bg-white/10 text-amber-400 hover:bg-amber-500 hover:text-black items-center justify-center flex-shrink-0 transition-all hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                    title="Noter ce titre"
+                    whileHover={{ scale: 1.1, rotate: 15 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                  </motion.button>
+                </div>
               </div>
-            </Link>
-          ))}
+            );
+          })}
 
           {(!list.albums || list.albums.length === 0) && (
             <div className="text-center py-16 md:py-20 border border-dashed border-white/10 rounded-3xl bg-white/10 backdrop-blur-lg">
@@ -226,6 +653,222 @@ export default function ListDetailsClientPage() {
           )}
         </div>
       </main>
+
+      {/* MODALE DE NOTATION */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+            />
+
+            <motion.div
+              className="relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] p-6 md:p-8 rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/50 overflow-hidden"
+              initial={{ opacity: 0, scale: 0.9, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 50 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            >
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#00e054]/20 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex justify-between items-center mb-4 relative z-10">
+                <motion.h2
+                  className="text-xl md:text-2xl font-black text-white"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  Noter
+                </motion.h2>
+                <motion.button
+                  onClick={() => setIsModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition"
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  ✕
+                </motion.button>
+              </div>
+
+              {ratingTarget && (
+                <motion.p
+                  className="text-[#00e054] text-sm font-bold mb-6 uppercase tracking-wide border-l-2 border-[#00e054] pl-3"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  {ratingTarget.name}
+                </motion.p>
+              )}
+
+              <motion.div
+                className="flex justify-center mb-6 gap-1 md:gap-2 bg-white/[0.03] backdrop-blur-lg p-4 md:p-5 rounded-2xl border border-white/5"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                {[1, 2, 3, 4, 5].map((star, index) => (
+                  <motion.button
+                    key={star}
+                    onClick={() => setUserRating(star)}
+                    onMouseEnter={() => setUserRating(star)}
+                    className={`text-4xl md:text-5xl focus:outline-none ${star <= userRating
+                      ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]'
+                      : 'text-gray-700 hover:text-gray-500'
+                      }`}
+                    initial={{ opacity: 0, scale: 0, rotate: -180 }}
+                    animate={{
+                      opacity: 1,
+                      scale: star <= userRating ? 1.1 : 1,
+                      rotate: 0
+                    }}
+                    transition={{
+                      delay: 0.25 + index * 0.05,
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 15
+                    }}
+                    whileHover={{ scale: 1.2, rotate: 15 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    ★
+                  </motion.button>
+                ))}
+              </motion.div>
+
+              <AnimatePresence>
+                {userRating > 0 && (
+                  <motion.div
+                    className="text-center mb-4"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <span className="text-[#00e054] font-black text-lg">{userRating}/5</span>
+                    <span className="text-gray-500 text-sm ml-2">
+                      {userRating === 1 && "Bof..."}
+                      {userRating === 2 && "Pas mal"}
+                      {userRating === 3 && "Bien !"}
+                      {userRating === 4 && "Très bien !"}
+                      {userRating === 5 && "Chef-d'œuvre !"}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <motion.textarea
+                className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white focus:border-[#00e054]/40 focus:bg-black/40 focus:outline-none mb-6 h-28 resize-none text-sm placeholder-gray-600 transition-all duration-300"
+                placeholder="Votre avis (optionnel)..."
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              />
+
+              <motion.div
+                className="flex gap-3"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <motion.button
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-5 py-3 text-gray-400 hover:text-white text-sm font-bold transition rounded-xl hover:bg-white/5"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Annuler
+                </motion.button>
+                <motion.button
+                  onClick={handleSaveReview}
+                  disabled={isSaving || userRating === 0}
+                  className={`flex-1 py-3 font-black rounded-xl uppercase tracking-widest text-sm transition-all ${userRating > 0
+                    ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20'
+                    : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    }`}
+                  whileHover={userRating > 0 ? { scale: 1.02 } : {}}
+                  whileTap={userRating > 0 ? { scale: 0.98 } : {}}
+                >
+                  {isSaving ? (
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="inline-block"
+                    >
+                      ⏳
+                    </motion.span>
+                  ) : 'Publier'}
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODALE PLAYLIST */}
+      <AnimatePresence>
+        {showPlaylistModal && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={() => setShowPlaylistModal(false)} />
+            <motion.div
+              className="relative bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+            >
+              <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                <h3 className="font-bold text-white">Ajouter à une playlist</h3>
+                <button onClick={() => setShowPlaylistModal(false)} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2">
+                {loadingPlaylists ? (
+                  <div className="text-center py-8 text-gray-500">Chargement...</div>
+                ) : (
+                  <div className="space-y-1">
+                    {playlists.map(playlist => (
+                      <button
+                        key={playlist.id}
+                        onClick={() => handleAddToPlaylist(playlist.id)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition text-left group"
+                      >
+                        {playlist.images?.[0]?.url ? (
+                          <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">{playlist.name}</div>
+                          <div className="text-xs text-gray-500">{playlist.tracks?.total || 0} titres</div>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 text-[#00e054]">
+                          <Check className="w-5 h-5" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

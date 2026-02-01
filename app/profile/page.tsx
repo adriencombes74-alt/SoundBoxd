@@ -35,6 +35,8 @@ export default function ProfilePage() {
     const [followingList, setFollowingList] = useState<any[]>([]);
     const [showFollowModal, setShowFollowModal] = useState<'followers' | 'following' | null>(null);
     const [activeTab, setActiveTab] = useState<'reviews' | 'lists' | 'likes'>('reviews');
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
     // --- LOGIQUE (Identique à l'original) ---
     const fetchUserProfile = async (userId: string, email: string) => {
@@ -88,6 +90,55 @@ export default function ProfilePage() {
     const addToTop = async (item: any) => { if (!user) return; const clean = { id: item.collectionId || item.trackId, name: searchMode === 'song' ? item.trackName : (item.collectionName || item.trackName), artist: item.artistName, image: item.artworkUrl100?.replace('100x100', '400x400') }; const col = searchMode === 'album' ? 'top_albums' : 'top_songs'; const list = searchMode === 'album' ? [...topAlbums, clean] : [...topSongs, clean]; if (list.length > 5) return alert('Top 5 complet'); if (searchMode === 'album') setTopAlbums(list); else setTopSongs(list); await supabase.from('profiles').update({ [col]: list }).eq('id', user.id); setSearchMode(null); setSearchQuery(""); setSearchResults([]); };
     const removeFromTop = async (idx: number, type: 'album' | 'song') => { if (!confirm("Retirer ?")) return; const col = type === 'album' ? 'top_albums' : 'top_songs'; const list = type === 'album' ? topAlbums.filter((_, i) => i !== idx) : topSongs.filter((_, i) => i !== idx); if (type === 'album') setTopAlbums(list); else setTopSongs(list); await supabase.from('profiles').update({ [col]: list }).eq('id', user.id); };
     const handleUpdateProfile = async () => { const { error } = await supabase.from('profiles').upsert({ id: user.id, username: newUsername, avatar_url: newAvatar, phone_number: newPhone, updated_at: new Date() }); if (!error) { setIsEditing(false); fetchUserProfile(user.id, user.email); } };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        // Validation
+        if (!file.type.startsWith('image/')) {
+            alert('Le fichier doit être une image');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image trop grande (max 5MB)');
+            return;
+        }
+
+        setUploadingAvatar(true);
+
+        try {
+            // Supprimer l'ancien avatar si existe
+            if (profile?.avatar_url) {
+                const oldPath = profile.avatar_url.split('/avatars/')[1];
+                if (oldPath) {
+                    await supabase.storage.from('avatars').remove([oldPath]);
+                }
+            }
+
+            // Upload du nouveau fichier
+            const ext = file.name.split('.').pop();
+            const fileName = `${Date.now()}.${ext}`;
+            const filePath = `${user.id}/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            // Récupérer l'URL publique
+            const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+            setNewAvatar(data.publicUrl);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('Erreur lors de l\'upload');
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
     const handleDeleteReview = async (id: number) => { if (!confirm("Supprimer ?")) return; setDeletingId(id); await supabase.from('reviews').delete().eq('id', id); setReviews(reviews.filter(r => r.id !== id)); setDeletingId(null); };
     const handleSignOut = async () => { await supabase.auth.signOut(); router.push('/'); };
 
@@ -263,8 +314,8 @@ export default function ProfilePage() {
                         <button
                             onClick={() => setActiveTab('reviews')}
                             className={`flex items-center gap-2 py-4 px-2 border-t-2 -mt-px transition-all ${activeTab === 'reviews'
-                                    ? 'border-[#00e054] text-white'
-                                    : 'border-transparent text-white/40 hover:text-white/70'
+                                ? 'border-[#00e054] text-white'
+                                : 'border-transparent text-white/40 hover:text-white/70'
                                 }`}
                         >
                             <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -278,8 +329,8 @@ export default function ProfilePage() {
                         <button
                             onClick={() => setActiveTab('lists')}
                             className={`flex items-center gap-2 py-4 px-2 border-t-2 -mt-px transition-all ${activeTab === 'lists'
-                                    ? 'border-[#00e054] text-white'
-                                    : 'border-transparent text-white/40 hover:text-white/70'
+                                ? 'border-[#00e054] text-white'
+                                : 'border-transparent text-white/40 hover:text-white/70'
                                 }`}
                         >
                             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -291,8 +342,8 @@ export default function ProfilePage() {
                         <button
                             onClick={() => setActiveTab('likes')}
                             className={`flex items-center gap-2 py-4 px-2 border-t-2 -mt-px transition-all ${activeTab === 'likes'
-                                    ? 'border-[#00e054] text-white'
-                                    : 'border-transparent text-white/40 hover:text-white/70'
+                                ? 'border-[#00e054] text-white'
+                                : 'border-transparent text-white/40 hover:text-white/70'
                                 }`}
                         >
                             <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -474,8 +525,50 @@ export default function ProfilePage() {
                                     <input type="text" className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-[#00e054] outline-none transition" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase ml-3">URL Avatar</label>
-                                    <input type="text" className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-[#00e054] outline-none transition" value={newAvatar} onChange={(e) => setNewAvatar(e.target.value)} />
+                                    <label className="text-xs font-bold text-gray-500 uppercase ml-3">Photo de profil</label>
+
+                                    {/* Preview actuelle */}
+                                    {(newAvatar || profile?.avatar_url) && (
+                                        <div className="flex items-center gap-4 mb-3 bg-white/5 p-3 rounded-2xl">
+                                            <img
+                                                src={newAvatar || profile.avatar_url}
+                                                className="w-16 h-16 rounded-full object-cover border-2 border-white/10"
+                                                alt="Avatar preview"
+                                            />
+                                            <button
+                                                onClick={() => setNewAvatar('')}
+                                                className="text-xs text-red-400 hover:text-red-300 hover:underline transition"
+                                            >
+                                                Supprimer
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* File Input */}
+                                    <label className="cursor-pointer block">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            className="hidden"
+                                            onChange={handleFileSelect}
+                                            disabled={uploadingAvatar}
+                                        />
+                                        <div className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 text-center hover:border-[#00e054] transition flex items-center justify-center gap-2">
+                                            {uploadingAvatar ? (
+                                                <>
+                                                    <span className="text-gray-400 text-sm">📤 Upload en cours...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="text-gray-400 text-sm">📸 Choisir une photo</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </label>
+                                    <p className="text-[10px] text-gray-500 ml-3">
+                                        Formats acceptés: JPG, PNG, WebP. Max 5MB.
+                                    </p>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-gray-500 uppercase ml-3">Numéro de téléphone</label>

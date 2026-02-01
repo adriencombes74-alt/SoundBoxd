@@ -930,6 +930,7 @@ export default function DiscoverPage() {
   const isUserScrollingRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingRef = useRef<boolean>(false); // Éviter les appels multiples
+  const hasInitialFetchRef = useRef<boolean>(false); // Éviter les refetch multiples
 
   // 0. AUTHENTIFICATION
   useEffect(() => {
@@ -942,6 +943,13 @@ export default function DiscoverPage() {
 
   // 1. RÉCUPÉRATION INITIALE DES CRITIQUES VIA L'API FEED
   const fetchRandomReviews = useCallback(async () => {
+    // Éviter les refetch multiples pendant le mount
+    if (hasInitialFetchRef.current) {
+      console.log('⏭️ Fetch initial déjà effectué, ignoré');
+      return;
+    }
+
+    hasInitialFetchRef.current = true;
     setLoading(true);
     try {
       console.log('🎬 Chargement initial du feed...');
@@ -1313,9 +1321,11 @@ export default function DiscoverPage() {
 
 
   // 6. EFFETS
+  // Fetch initial reviews once on mount
   useEffect(() => {
     fetchRandomReviews();
-  }, [fetchRandomReviews]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount
 
   // Détecter le scroll utilisateur
   useEffect(() => {
@@ -1500,25 +1510,21 @@ export default function DiscoverPage() {
       {/* Background Glow */}
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
-      {/* NAVBAR FLOTTANTE */}
-      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
-        <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
-          <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
+      {/* NAVBAR FLOTTANTE - MODERNISÉE */}
+      <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-4">
+        <nav className="flex items-center justify-between px-6 py-2.5 w-full max-w-4xl rounded-full bg-black/40 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <Link href="/" className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent hover:to-[#00e054] transition-all">
+            Music<span className="text-[#00e054]">Boxd</span>
+          </Link>
 
-          <div className="hidden md:flex items-center gap-2 md:gap-8 text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/70">
-            <Link href="/search" className="hover:text-white transition hidden sm:inline">Albums</Link>
-            <Link href="/discover" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-              <span className="text-sm md:text-base opacity-70">⚡</span> <span className="hidden sm:inline">Découvrir</span>
-            </Link>
-            <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
-              <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
-            </Link>
-            <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+          <div className="flex items-center gap-6 text-[11px] font-semibold uppercase tracking-wide">
+            <Link href="/search" className="text-white/60 hover:text-white transition">Albums</Link>
+            <Link href="/community" className="text-white/60 hover:text-white transition">Membres</Link>
 
-            {/* Bouton audio */}
+            {/* Bouton audio minimaliste */}
             <button
               onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-              className={`transition text-lg md:text-base p-1.5 rounded-full hover:bg-white/10 ${isAudioEnabled ? 'text-[#00e054]' : 'text-gray-400 hover:text-white'}`}
+              className={`text-base transition ${isAudioEnabled ? 'text-[#00e054]' : 'text-white/40 hover:text-white/80'}`}
               title={isAudioEnabled ? "Désactiver l'audio" : "Activer l'audio"}
             >
               {isAudioEnabled ? "🔊" : "🔇"}
@@ -1527,31 +1533,31 @@ export default function DiscoverPage() {
             {user ? (
               <ProfileMenu user={user} />
             ) : (
-              <Link href="/login" className="flex items-center gap-1 md:gap-2 pl-2 md:pl-4 border-l border-white/10 hover:opacity-80 transition">
-                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-tr from-[#00e054] to-emerald-600 flex items-center justify-center text-black font-black text-[10px] md:text-xs">?</div>
+              <Link href="/login" className="flex items-center gap-2 text-white/60 hover:text-white transition">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-700 flex items-center justify-center text-black font-bold text-xs shadow-lg">?</div>
               </Link>
             )}
           </div>
         </nav>
       </div>
 
-      {/* ONGLETS AMIS/DÉCOUVRIR */}
+      {/* ONGLETS AMIS/DÉCOUVRIR - MODERNISÉS */}
       <div className="fixed top-6 md:top-24 left-0 right-0 flex justify-center z-40 px-4">
-        <div className="flex bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
+        <div className="inline-flex p-1 bg-black/40 backdrop-blur-xl border border-white/[0.08] rounded-full shadow-lg">
           <button
             onClick={() => setActiveTab('friends')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${activeTab === 'friends'
-              ? 'bg-[#00e054] text-black'
-              : 'text-white hover:text-[#00e054]'
+            className={`px-5 py-2 text-xs font-bold uppercase tracking-wide rounded-full transition-all duration-300 ${activeTab === 'friends'
+                ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.3)]'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
           >
             👥 Amis
           </button>
           <button
             onClick={() => setActiveTab('discover')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest rounded-full transition ${activeTab === 'discover'
-              ? 'bg-[#00e054] text-black'
-              : 'text-white hover:text-[#00e054]'
+            className={`px-5 py-2 text-xs font-bold uppercase tracking-wide rounded-full transition-all duration-300 ${activeTab === 'discover'
+                ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.3)]'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
           >
             ⚡ Découvrir
