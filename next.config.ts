@@ -12,9 +12,8 @@ console.log("----------------------------------------");
 const nextConfig: NextConfig = {
   output: isMobileBuild ? 'export' : undefined,
   images: {
-    unoptimized: true, 
+    unoptimized: true,
   },
-  // Ensure paths work correctly on static export
   trailingSlash: false,
 };
 

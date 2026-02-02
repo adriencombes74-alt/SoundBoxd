@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
 
-// PAS de 'force-dynamic' ici car ça casse la route sur Vercel !
-
 export async function GET(request: Request) {
   console.log("🚀 Callback started (No Dynamic Flag)");
-  
+
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
-    const baseUrl = process.env.SPOTIFY_REDIRECT_URI 
-      ? new URL(process.env.SPOTIFY_REDIRECT_URI).origin 
+    const baseUrl = process.env.SPOTIFY_REDIRECT_URI
+      ? new URL(process.env.SPOTIFY_REDIRECT_URI).origin
       : new URL(request.url).origin;
 
     if (error) {
@@ -27,7 +25,7 @@ export async function GET(request: Request) {
 
     const parts = state.split(':');
     if (parts.length < 2) {
-         return NextResponse.redirect(`${baseUrl}/settings/connections?error=invalid_state`);
+      return NextResponse.redirect(`${baseUrl}/settings/connections?error=invalid_state`);
     }
     const userId = parts[1];
     console.log("👤 User ID:", userId);
@@ -37,7 +35,7 @@ export async function GET(request: Request) {
     const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
 
     if (!clientId || !clientSecret || !redirectUri) {
-        return NextResponse.json({ error: 'Server configuration missing' }, { status: 500 });
+      return NextResponse.json({ error: 'Server configuration missing' }, { status: 500 });
     }
 
     const basicAuth = btoa(`${clientId}:${clientSecret}`);
@@ -65,8 +63,8 @@ export async function GET(request: Request) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-        console.error("❌ Supabase config missing");
-        return NextResponse.redirect(`${baseUrl}/settings/connections?error=server_error`);
+      console.error("❌ Supabase config missing");
+      return NextResponse.redirect(`${baseUrl}/settings/connections?error=server_error`);
     }
 
     const { access_token, refresh_token, expires_in } = tokenData;
@@ -74,30 +72,30 @@ export async function GET(request: Request) {
     expiresAt.setSeconds(expiresAt.getSeconds() + expires_in);
 
     const dbUrl = `${supabaseUrl}/rest/v1/user_integrations`;
-    
+
     console.log("💾 Saving to DB via Fetch...");
     const dbResponse = await fetch(dbUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({
-            user_id: userId,
-            provider: 'spotify',
-            access_token: access_token,
-            refresh_token: refresh_token,
-            expires_at: expiresAt.toISOString(),
-            updated_at: new Date().toISOString()
-        })
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        provider: 'spotify',
+        access_token: access_token,
+        refresh_token: refresh_token,
+        expires_at: expiresAt.toISOString(),
+        updated_at: new Date().toISOString()
+      })
     });
 
     if (!dbResponse.ok) {
-        const dbErr = await dbResponse.text();
-        console.error('❌ Database Error (REST):', dbErr);
-        return NextResponse.redirect(`${baseUrl}/settings/connections?error=database_error`);
+      const dbErr = await dbResponse.text();
+      console.error('❌ Database Error (REST):', dbErr);
+      return NextResponse.redirect(`${baseUrl}/settings/connections?error=database_error`);
     }
 
     console.log("✨ Success!");

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     // ICI : Logique de matching
     // 1. Rechercher dans la table 'profiles' les utilisateurs ayant ces numéros
     // Note : Cela suppose que la colonne 'phone' existe et est indexée
-    
+
     const { data: matchedProfiles, error } = await supabase
       .from('profiles')
       .select('id, username, avatar_url, phone_number')

@@ -68,7 +68,7 @@ export async function POST(request: Request) {
         }
 
         // 3. Appel API Deezer (Public)
-        const deezerRes = await fetch(`https://api.deezer.com/playlist/${playlistId}/tracks?limit=250`);
+        const deezerRes = await fetch(`https://api.deezer.com/playlist/${playlistId}/tracks?limit=500`);
         const deezerData = await deezerRes.json();
 
         if (deezerData.error) {

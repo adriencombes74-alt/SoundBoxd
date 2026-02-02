@@ -4,114 +4,268 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import ProfileMenu from '@/components/ui/profile-menu';
-import { syncContactsToBackend } from '@/lib/contacts';
-import { Capacitor } from '@capacitor/core';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, MessageCircle, Check, Plus, Share2 } from 'lucide-react';
 
 export default function CommunityPage() {
-    const [query, setQuery] = useState('');
-    const [results, setResults] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
     const [user, setUser] = useState<any>(null);
 
-    // Suggestion d'amis via Contacts
-    const [suggestions, setSuggestions] = useState<any[]>([]);
-    const [showSyncModal, setShowSyncModal] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [permissionStep, setPermissionStep] = useState<'intro' | 'results'>('intro');
-    const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+    // Feed States
+    const [posts, setPosts] = useState<any[]>([]);
+    const [feedLoading, setFeedLoading] = useState(true);
+    const [userLikes, setUserLikes] = useState<Set<number>>(new Set());
 
+    // Comment Modal
+    const [showCommentModal, setShowCommentModal] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<any>(null);
+    const [comments, setComments] = useState<any[]>([]);
+    const [newComment, setNewComment] = useState('');
+    const [isPostingComment, setIsPostingComment] = useState(false);
+
+    // Create Post Menu
+    const [showCreateMenu, setShowCreateMenu] = useState(false);
+    const [userLists, setUserLists] = useState<any[]>([]);
+    const [showListSelectionModal, setShowListSelectionModal] = useState(false);
+
+    // Charger l'utilisateur
     useEffect(() => {
         const checkUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             setUser(user);
-            if (user) {
-                // Charger les abonnements existants pour ne pas suggérer ceux qu'on suit déjà
-                const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
-                if (follows) {
-                    setFollowingIds(new Set(follows.map((f: any) => f.following_id)));
-                }
-            }
         };
         checkUser();
     }, []);
 
-    const searchUsers = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!query.trim()) return;
+    // Charger le feed
+    useEffect(() => {
+        fetchFeed();
+    }, [user]);
 
-        setLoading(true);
-        setHasSearched(true);
+    const fetchFeed = async () => {
+        setFeedLoading(true);
+        try {
+            // Récupérer les posts
+            const { data: postsData, error: postsError } = await supabase
+                .from('list_posts')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (postsError) throw postsError;
+
+            if (!postsData || postsData.length === 0) {
+                setPosts([]);
+                setFeedLoading(false);
+                return;
+            }
+
+            // Récupérer les profils
+            const userIds = [...new Set(postsData.map(p => p.user_id))];
+            const { data: profilesData } = await supabase
+                .from('profiles')
+                .select('id, username, avatar_url')
+                .in('id', userIds);
+
+            // Récupérer les listes
+            const listIds = [...new Set(postsData.map(p => p.list_id))];
+            const { data: listsData } = await supabase
+                .from('lists')
+                .select('id, title, description, albums, created_at')
+                .in('id', listIds);
+
+            // Mapper les profils et listes aux posts
+            const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+            const listsMap = new Map(listsData?.map(l => [l.id, l]) || []);
+
+            // Charger les compteurs de likes et commentaires
+            const postIds = postsData.map(p => p.id);
+
+            const { data: likesData } = await supabase
+                .from('list_post_likes')
+                .select('post_id')
+                .in('post_id', postIds);
+
+            const { data: commentsData } = await supabase
+                .from('list_post_comments')
+                .select('post_id')
+                .in('post_id', postIds);
+
+            // Mapper les counts
+            const likesMap = new Map();
+            likesData?.forEach(l => {
+                likesMap.set(l.post_id, (likesMap.get(l.post_id) || 0) + 1);
+            });
+
+            const commentsMap = new Map();
+            commentsData?.forEach(c => {
+                commentsMap.set(c.post_id, (commentsMap.get(c.post_id) || 0) + 1);
+            });
+
+            const enrichedPosts = postsData.map(post => ({
+                ...post,
+                profiles: profilesMap.get(post.user_id) || { id: post.user_id, username: 'Inconnu', avatar_url: null },
+                lists: listsMap.get(post.list_id) || null,
+                like_count: likesMap.get(post.id) || 0,
+                comment_count: commentsMap.get(post.id) || 0
+            }));
+
+            setPosts(enrichedPosts);
+
+            if (user) {
+                const { data: userLikesData } = await supabase
+                    .from('list_post_likes')
+                    .select('post_id')
+                    .eq('user_id', user.id);
+
+                if (userLikesData) {
+                    setUserLikes(new Set(userLikesData.map((l: any) => l.post_id)));
+                }
+            }
+        } catch (error) {
+            console.error('Erreur chargement feed:', error);
+        } finally {
+            setFeedLoading(false);
+        }
+    };
+
+    const handleLikePost = async (postId: number) => {
+        if (!user) {
+            alert("Connectez-vous pour liker !");
+            return;
+        }
+
+        const isLiked = userLikes.has(postId);
+
+        if (isLiked) {
+            const { error } = await supabase
+                .from('list_post_likes')
+                .delete()
+                .eq('post_id', postId)
+                .eq('user_id', user.id);
+
+            if (!error) {
+                setUserLikes(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(postId);
+                    return newSet;
+                });
+                setPosts(prev => prev.map(p =>
+                    p.id === postId ? { ...p, like_count: (p.like_count || 1) - 1 } : p
+                ));
+            }
+        } else {
+            const { error } = await supabase
+                .from('list_post_likes')
+                .insert({ post_id: postId, user_id: user.id });
+
+            if (!error) {
+                setUserLikes(prev => new Set(prev).add(postId));
+                setPosts(prev => prev.map(p =>
+                    p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p
+                ));
+            }
+        }
+    };
+
+    const openCommentModal = async (post: any) => {
+        setSelectedPost(post);
+        setShowCommentModal(true);
+
+        const { data: commentsData } = await supabase
+            .from('list_post_comments')
+            .select(`
+                *,
+                profiles:user_id (username, avatar_url)
+            `)
+            .eq('post_id', post.id)
+            .order('created_at', { ascending: true });
+
+        setComments(commentsData || []);
+    };
+
+    const handlePostComment = async () => {
+        if (!user || !newComment.trim() || !selectedPost) return;
+
+        setIsPostingComment(true);
 
         const { data, error } = await supabase
-            .from('profiles')
+            .from('list_post_comments')
+            .insert({
+                post_id: selectedPost.id,
+                user_id: user.id,
+                content: newComment.trim()
+            })
+            .select(`
+                *,
+                profiles:user_id (username, avatar_url)
+            `)
+            .single();
+
+        if (!error && data) {
+            setComments(prev => [...prev, data]);
+            setNewComment('');
+            setPosts(prev => prev.map(p =>
+                p.id === selectedPost.id ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p
+            ));
+        }
+
+        setIsPostingComment(false);
+    };
+
+    const openCreateMenu = async () => {
+        if (!user) {
+            alert("Connectez-vous pour créer des posts !");
+            return;
+        }
+
+        setShowCreateMenu(true);
+
+        const { data: listsData } = await supabase
+            .from('lists')
             .select('*')
-            .ilike('username', `%${query}%`)
-            .limit(20);
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
 
-        if (error) {
-            console.error("Erreur:", error);
-        } else {
-            setResults(data || []);
-        }
-        setLoading(false);
+        setUserLists(listsData || []);
     };
 
-    const handleSyncContacts = async () => {
-        setIsSyncing(true);
-        try {
-            const result = await syncContactsToBackend(user.id);
-            if (result.success && result.matches) {
-                // Filtrer ceux qu'on suit déjà
-                const newSuggestions = result.matches.filter((p: any) => !followingIds.has(p.id));
-                setSuggestions(newSuggestions);
-                setPermissionStep('results');
-            } else {
-                alert("Aucun contact trouvé sur MusicBoxd pour le moment.");
-                setShowSyncModal(false);
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Impossible de synchroniser les contacts. Vérifiez les permissions.");
-            setShowSyncModal(false);
-        } finally {
-            setIsSyncing(false);
+    const handleShareExistingList = async (list: any) => {
+        const { data: existingPost } = await supabase
+            .from('list_posts')
+            .select('id')
+            .eq('list_id', list.id)
+            .maybeSingle();
+
+        if (existingPost) {
+            alert("Cette liste est déjà partagée !");
+            return;
         }
-    };
 
-    const handleFollowSuggestion = async (profileId: string) => {
-        if (!user) return;
-
-        const { error } = await supabase.from('follows').insert({
-            follower_id: user.id,
-            following_id: profileId
-        });
+        const { error } = await supabase
+            .from('list_posts')
+            .insert({
+                user_id: user.id,
+                list_id: list.id,
+                caption: null
+            });
 
         if (!error) {
-            // Mettre à jour l'état local
-            setFollowingIds(prev => new Set(prev).add(profileId));
-            setSuggestions(prev => prev.filter(p => p.id !== profileId));
+            setShowListSelectionModal(false);
+            setShowCreateMenu(false);
+            fetchFeed();
         } else {
-            alert("Erreur lors du suivi.");
+            alert("Erreur lors du partage");
         }
     };
 
     return (
         <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
 
-            {/* --- GLOWS D'AMBIANCE --- */}
+            {/* GLOWS */}
             <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
             <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[120px] rounded-full pointer-events-none z-0" />
 
-            {/* --- FOND ALBUM ICÔNIQUE (THE DARK SIDE OF THE MOON) --- */}
-            <div className="absolute top-0 inset-x-0 h-[50vh] md:h-[70vh] w-full z-0 overflow-hidden pointer-events-none">
-                <img src="https://upload.wikimedia.org/wikipedia/en/3/3b/Dark_Side_of_the_Moon.png"
-                    className="w-full h-full object-cover blur-[10px] scale-125 opacity-70 animate-in fade-in duration-1000"
-                    alt="The Dark Side of the Moon cover" />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-[#050505]/60 to-[#050505]" />
-            </div>
-
-            {/* --- NAVBAR FLOTTANTE --- */}
+            {/* NAVBAR */}
             <div className="hidden md:flex fixed top-4 left-0 right-0 justify-center z-50 px-2 md:px-4">
                 <nav className="flex items-center justify-between px-4 md:px-8 py-2 md:py-3 w-full max-w-5xl rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-150 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)]">
                     <Link href="/" className="text-lg md:text-xl font-black tracking-tighter uppercase bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:to-[#00e054] transition-all">Music<span className="text-[#00e054]">Boxd</span></Link>
@@ -123,7 +277,7 @@ export default function CommunityPage() {
                         <Link href="/lists/import" className="hover:text-white transition flex items-center gap-1 md:gap-2">
                             <span className="text-sm md:text-base opacity-70">📥</span> <span className="hidden sm:inline">Importer</span>
                         </Link>
-                        <Link href="/community" className="hover:text-white transition hidden md:inline">Membres</Link>
+                        <Link href="/search?type=members" className="hover:text-white transition hidden md:inline">Membres</Link>
                         {user ? (
                             <ProfileMenu user={user} />
                         ) : (
@@ -133,158 +287,386 @@ export default function CommunityPage() {
                 </nav>
             </div>
 
-            <div className="relative z-10 max-w-4xl mx-auto px-4 md:px-6 pt-20 md:pt-32 lg:pt-40 pb-12 md:pb-20 flex flex-col items-center justify-center min-h-[50vh] md:min-h-[60vh]">
-                <div className="text-center mb-8 md:mb-16">
+            <div className="relative z-10 max-w-5xl mx-auto px-4 md:px-6 pt-20 md:pt-32 lg:pt-40 pb-12 md:pb-20">
+                <div className="text-center mb-8 md:mb-12">
                     <h1 className="text-3xl md:text-5xl lg:text-6xl font-black mb-4 md:mb-6 tracking-tight text-white">
-                        La <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00e054] to-emerald-500">Communauté</span>
+                        Feed <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00e054] to-emerald-500">Communautaire</span>
                     </h1>
-                    <p className="text-gray-400 text-sm md:text-lg max-w-sm md:max-w-xl mx-auto leading-relaxed mb-6 md:mb-8 px-2">
-                        Trouvez vos amis, découvrez de nouveaux curateurs musicaux et partagez vos découvertes.
+                    <p className="text-gray-400 text-sm md:text-lg max-w-sm md:max-w-2xl mx-auto leading-relaxed mb-6 md:mb-8 px-2">
+                        Découvrez les listes musicales partagées par la communauté.
                     </p>
-
-                    {/* BOUTON FIND FRIENDS (Mobile Only ideally, but handled by logic) */}
-                    {user && (Capacitor.isNativePlatform() || true) && ( // Enlever '|| true' en prod si on veut strict mobile
-                        <button
-                            onClick={() => { setShowSyncModal(true); setPermissionStep('intro'); }}
-                            className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 md:px-6 md:py-3 rounded-full font-bold transition flex items-center gap-1.5 md:gap-2 mx-auto backdrop-blur-md text-sm md:text-base"
-                        >
-                            <span>📱</span> Trouver mes contacts
-                        </button>
-                    )}
                 </div>
 
-                {/* BARRE DE RECHERCHE */}
-                <form onSubmit={searchUsers} className="relative group max-w-2xl mx-auto mb-12 md:mb-20 w-full">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-[#00e054] to-blue-600 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
-                    <div className="relative flex items-center">
-                        <input
-                            type="text"
-                            placeholder="Rechercher un membre..."
-                            className="w-full px-4 md:px-8 py-3 md:py-5 pr-28 md:pr-36 rounded-full transition-all duration-300 bg-white/[0.03] backdrop-blur-2xl backdrop-saturate-200 border border-white/10 border-t-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.15)] text-sm md:text-lg focus:outline-none focus:border-[#00e054]/50"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                        />
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="absolute right-2 bg-[#00e054] text-black font-bold px-4 md:px-6 py-2 md:py-2.5 rounded-full hover:bg-[#00c04b] transition disabled:opacity-50 hover:scale-105 shadow-lg shadow-green-900/20 text-sm md:text-base"
-                        >
-                            {loading ? '...' : 'Chercher'}
-                        </button>
-                    </div>
-                </form>
+                {/* BOUTON FLOTTANT + CRÉER */}
+                {user && (
+                    <motion.button
+                        onClick={openCreateMenu}
+                        className="fixed bottom-24 right-6 md:bottom-8 md:right-8 z-50 w-14 h-14 md:w-16 md:h-16 bg-[#00e054] text-black rounded-full shadow-2xl shadow-green-900/40 flex items-center justify-center hover:scale-110 transition-transform"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                    >
+                        <Plus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={3} />
+                    </motion.button>
+                )}
 
-                {/* RÉSULTATS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 w-full">
-                    {hasSearched && results.length === 0 && !loading && (
-                        <div className="col-span-full text-center py-10 md:py-16 border border-dashed border-white/10 rounded-2xl md:rounded-3xl bg-white/[0.02]">
-                            <p className="text-gray-500 text-base md:text-lg">Aucun membre trouvé avec ce pseudo.</p>
+                {/* FEED */}
+                <div className="space-y-6">
+                    {feedLoading ? (
+                        <div className="text-center py-20 text-gray-500">Chargement du feed...</div>
+                    ) : posts.length === 0 ? (
+                        <div className="text-center py-20 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
+                            <p className="text-gray-500 mb-4">Aucune liste partagée pour le moment.</p>
+                            <p className="text-sm text-gray-600">Soyez le premier à partager votre liste !</p>
                         </div>
+                    ) : (
+                        posts.map((post) => (
+                            <ListPostCard
+                                key={post.id}
+                                post={post}
+                                isLiked={userLikes.has(post.id)}
+                                onLike={() => handleLikePost(post.id)}
+                                onComment={() => openCommentModal(post)}
+                            />
+                        ))
                     )}
-
-                    {results.map((profile) => (
-                        <Link key={profile.id} href={`/profile-view?u=${profile.username}`} className="group block">
-                            <div className="flex items-center justify-between bg-[#121212] p-4 md:p-6 rounded-xl md:rounded-2xl border border-white/5 hover:border-[#00e054]/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                                <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
-                                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-[#00e054] to-emerald-800 flex items-center justify-center text-lg md:text-2xl font-black text-black overflow-hidden border-2 border-[#14181c] shadow-lg group-hover:scale-110 transition duration-300 flex-shrink-0">
-                                        {profile.avatar_url ? (
-                                            <img src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
-                                        ) : (
-                                            (profile.username && profile.username[0]) ? profile.username[0].toUpperCase() : '?'
-                                        )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="font-bold text-white text-base md:text-xl group-hover:text-[#00e054] transition mb-0.5 md:mb-1 truncate">{profile.username || 'Utilisateur'}</h3>
-                                        <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-widest font-bold">Membre</p>
-                                    </div>
-                                </div>
-
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white/10 flex items-center justify-center text-gray-500 group-hover:border-[#00e054] group-hover:text-[#00e054] group-hover:bg-[#00e054]/10 transition flex-shrink-0">
-                                    ➜
-                                </div>
-                            </div>
-                        </Link>
-                    ))}
                 </div>
             </div>
 
-            {/* --- MODALE DE SYNCHRONISATION --- */}
-            {showSyncModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-[#181818] border border-white/10 rounded-2xl md:rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
-
-                        {permissionStep === 'intro' ? (
-                            <div className="p-6 md:p-8 text-center">
-                                <div className="w-14 h-14 md:w-16 md:h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 text-2xl md:text-3xl">
-                                    👥
-                                </div>
-                                <h2 className="text-xl md:text-2xl font-black text-white mb-3 md:mb-4">Retrouvez vos amis</h2>
-                                <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-6 md:mb-8">
-                                    Pour voir qui est déjà sur MusicBoxd, nous avons besoin d'accéder à vos contacts.
-                                    <br /><br />
-                                    Les numéros seront envoyés de manière sécurisée pour trouver des correspondances et ne seront pas stockés.
-                                </p>
-                                <div className="flex flex-col gap-3">
-                                    <button
-                                        onClick={handleSyncContacts}
-                                        disabled={isSyncing}
-                                        className="bg-[#00e054] text-black font-bold py-3 md:py-3.5 rounded-xl hover:bg-[#00c549] transition flex items-center justify-center gap-2 text-sm md:text-base"
-                                    >
-                                        {isSyncing ? 'Recherche...' : 'Continuer'}
-                                    </button>
-                                    <button
-                                        onClick={() => setShowSyncModal(false)}
-                                        className="text-gray-500 hover:text-white py-2 text-xs md:text-sm font-bold transition"
-                                    >
-                                        Plus tard
-                                    </button>
-                                </div>
+            {/* MODALE COMMENTAIRES */}
+            <AnimatePresence>
+                {showCommentModal && selectedPost && (
+                    <motion.div
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+                            onClick={() => setShowCommentModal(false)}
+                        />
+                        <motion.div
+                            className="relative bg-[#121212] border border-white/10 rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                                <h3 className="text-xl font-black text-white">Commentaires</h3>
+                                <button
+                                    onClick={() => setShowCommentModal(false)}
+                                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition">
+                                    ✕
+                                </button>
                             </div>
-                        ) : (
-                            <div className="flex flex-col max-h-[70vh]">
-                                <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-[#181818] z-10">
-                                    <h3 className="font-bold text-white text-base md:text-lg">Amis suggérés ({suggestions.length})</h3>
-                                    <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-white text-xl md:text-2xl leading-none">&times;</button>
-                                </div>
 
-                                <div className="overflow-y-auto p-3 md:p-4 space-y-2 flex-1">
-                                    {suggestions.length > 0 ? (
-                                        <>
-                                            <p className="text-gray-400 text-[10px] md:text-xs text-center mb-3 md:mb-4">Ces contacts sont déjà sur MusicBoxd, voulez-vous les suivre ?</p>
-                                            {suggestions.map(suggestion => (
-                                                <div key={suggestion.id} className="flex items-center justify-between bg-white/5 p-2.5 md:p-3 rounded-lg md:rounded-xl border border-white/5">
-                                                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                                                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs md:text-sm font-bold overflow-hidden flex-shrink-0">
-                                                            {suggestion.avatar_url ? (
-                                                                <img src={suggestion.avatar_url} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                suggestion.username[0].toUpperCase()
-                                                            )}
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="font-bold text-white text-xs md:text-sm truncate">{suggestion.username}</div>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleFollowSuggestion(suggestion.id)}
-                                                        className="bg-white text-black text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-full hover:bg-[#00e054] transition flex-shrink-0"
-                                                    >
-                                                        Suivre
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </>
-                                    ) : (
-                                        <div className="py-8 md:py-12 text-center text-gray-500">
-                                            <p className="text-sm md:text-base">Aucun nouvel ami trouvé dans vos contacts.</p>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {comments.length === 0 ? (
+                                    <p className="text-center text-gray-500 py-8">Aucun commentaire pour le moment.</p>
+                                ) : (
+                                    comments.map((comment) => (
+                                        <div key={comment.id} className="flex gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
+                                                {comment.profiles?.avatar_url ? (
+                                                    <img src={comment.profiles.avatar_url} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    comment.profiles?.username?.[0]?.toUpperCase() || '?'
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="font-bold text-white text-sm">{comment.profiles?.username || 'Utilisateur'}</div>
+                                                <p className="text-gray-300 text-sm mt-1">{comment.content}</p>
+                                                <p className="text-xs text-gray-600 mt-1">
+                                                    {new Date(comment.created_at).toLocaleDateString('fr-FR', {
+                                                        day: 'numeric',
+                                                        month: 'short',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </p>
+                                            </div>
                                         </div>
-                                    )}
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="p-4 border-t border-white/10">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Ajouter un commentaire..."
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handlePostComment();
+                                            }
+                                        }}
+                                        className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-[#00e054] outline-none transition"
+                                    />
+                                    <button
+                                        onClick={handlePostComment}
+                                        disabled={!newComment.trim() || isPostingComment}
+                                        className="bg-[#00e054] text-black px-5 py-2.5 rounded-xl font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00c04b] transition"
+                                    >
+                                        {isPostingComment ? '...' : 'Publier'}
+                                    </button>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* MENU CRÉER POST */}
+            <AnimatePresence>
+                {showCreateMenu && (
+                    <motion.div
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+                            onClick={() => setShowCreateMenu(false)}
+                        />
+                        <motion.div
+                            className="relative bg-[#121212] border border-white/10 rounded-3xl w-full max-w-sm p-6"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <h3 className="text-2xl font-black text-white mb-6">Créer un post</h3>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        setShowCreateMenu(false);
+                                        setShowListSelectionModal(true);
+                                    }}
+                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-4 rounded-xl transition text-left px-5 flex items-center gap-3"
+                                >
+                                    <Share2 className="w-5 h-5 text-[#00e054]" />
+                                    <div>
+                                        <div className="font-bold">Partager une liste existante</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">Choisissez parmi vos listes</div>
+                                    </div>
+                                </button>
+
+                                <Link
+                                    href="/lists/create"
+                                    className="w-full bg-[#00e054]/10 hover:bg-[#00e054]/20 border border-[#00e054]/30 text-white py-4 rounded-xl transition text-left px-5 flex items-center gap-3 block"
+                                    onClick={() => setShowCreateMenu(false)}
+                                >
+                                    <Plus className="w-5 h-5 text-[#00e054]" />
+                                    <div>
+                                        <div className="font-bold">Créer une nouvelle liste</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">Commencez dès maintenant</div>
+                                    </div>
+                                </Link>
+                            </div>
+
+                            <button
+                                onClick={() => setShowCreateMenu(false)}
+                                className="w-full mt-4 text-gray-500 hover:text-white py-2 text-sm transition"
+                            >
+                                Annuler
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* MODALE SÉLECTION DE LISTE */}
+            <AnimatePresence>
+                {showListSelectionModal && (
+                    <motion.div
+                        className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+                            onClick={() => setShowListSelectionModal(false)}
+                        />
+                        <motion.div
+                            className="relative bg-[#121212] border border-white/10 rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col"
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                        >
+                            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                                <h3 className="text-xl font-black text-white">Choisir une liste</h3>
+                                <button
+                                    onClick={() => setShowListSelectionModal(false)}
+                                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                {userLists.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <p className="text-gray-500 mb-4">Vous n'avez pas encore de liste.</p>
+                                        <Link
+                                            href="/lists/create"
+                                            className="inline-block bg-[#00e054] text-black px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-[#00c04b] transition"
+                                            onClick={() => setShowListSelectionModal(false)}
+                                        >
+                                            Créer ma première liste
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    userLists.map((list) => (
+                                        <button
+                                            key={list.id}
+                                            onClick={() => handleShareExistingList(list)}
+                                            className="w-full flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition text-left group"
+                                        >
+                                            {list.albums?.[0]?.image && (
+                                                <img
+                                                    src={list.albums[0].image}
+                                                    className="w-12 h-12 rounded object-cover"
+                                                    alt={list.title}
+                                                />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-bold text-white text-sm truncate group-hover:text-[#00e054]">{list.title}</div>
+                                                <div className="text-xs text-gray-500">{list.albums?.length || 0} titres</div>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
+    );
+}
+
+// Composant ListPostCard
+function ListPostCard({ post, isLiked, onLike, onComment }: any) {
+    const list = post.lists;
+    const author = post.profiles;
+
+    const albumCovers = list?.albums?.slice(0, 9).map((album: any) => album.image) || [];
+
+    const [likeCount, setLikeCount] = useState(0);
+    const [commentCount, setCommentCount] = useState(0);
+
+    useEffect(() => {
+        const fetchCounts = async () => {
+            const { count: likes } = await supabase
+                .from('list_post_likes')
+                .select('*', { count: 'exact', head: true })
+                .eq('post_id', post.id);
+            setLikeCount(likes || 0);
+
+            const { count: comments } = await supabase
+                .from('list_post_comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('post_id', post.id);
+            setCommentCount(comments || 0);
+        };
+
+        fetchCounts();
+    }, [post.id]);
+
+    // Synchroniser avec les props quand elles changent
+    useEffect(() => {
+        if (post.like_count !== undefined) {
+            setLikeCount(post.like_count);
+        }
+        if (post.comment_count !== undefined) {
+            setCommentCount(post.comment_count);
+        }
+    }, [post.like_count, post.comment_count]);
+
+    return (
+        <motion.div
+            className="bg-[#121212] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+        >
+            <div className="p-4 flex items-center gap-3 border-b border-white/5">
+                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold overflow-hidden">
+                    {author?.avatar_url ? (
+                        <img src={author.avatar_url} className="w-full h-full object-cover" />
+                    ) : (
+                        author?.username?.[0]?.toUpperCase() || '?'
+                    )}
+                </div>
+                <div className="flex-1">
+                    <Link href={`/profile-view?u=${author?.username}`} className="font-bold text-white hover:text-[#00e054] transition">
+                        @{author?.username || 'Utilisateur'}
+                    </Link>
+                    <p className="text-xs text-gray-500">
+                        {new Date(post.created_at).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'long',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}
+                    </p>
+                </div>
+            </div>
+
+            <Link href={`/list-view?id=${list?.id}`} className="block">
+                <div className={`grid gap-0.5 p-4 bg-gradient-to-br from-purple-900/20 to-green-900/10 ${albumCovers.length === 1 ? 'grid-cols-1' :
+                    albumCovers.length <= 4 ? 'grid-cols-2' :
+                        'grid-cols-3'
+                    } aspect-square`}>
+                    {albumCovers.map((cover: string, i: number) => (
+                        <div key={i} className="relative overflow-hidden rounded-lg bg-gray-900">
+                            <img
+                                src={cover}
+                                className="w-full h-full object-cover hover:scale-105 transition duration-300"
+                                alt=""
+                            />
+                        </div>
+                    ))}
+                </div>
+            </Link>
+
+            <div className="p-4 border-t border-white/5">
+                <Link href={`/list-view?id=${list?.id}`}>
+                    <h3 className="font-black text-white text-lg mb-1 hover:text-[#00e054] transition">{list?.title}</h3>
+                </Link>
+                {post.caption && (
+                    <p className="text-gray-400 text-sm mb-3">{post.caption}</p>
+                )}
+                <p className="text-xs text-gray-600">{list?.albums?.length || 0} titres</p>
+            </div>
+
+            <div className="p-4 border-t border-white/5 flex items-center gap-6">
+                <button
+                    onClick={onLike}
+                    className="flex items-center gap-2 group"
+                >
+                    <Heart
+                        className={`w-5 h-5 transition ${isLiked ? 'fill-red-500 text-red-500' : 'text-gray-400 group-hover:text-red-500'}`}
+                    />
+                    <span className={`text-sm font-bold ${isLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}`}>
+                        {likeCount}
+                    </span>
+                </button>
+
+                <button
+                    onClick={onComment}
+                    className="flex items-center gap-2 group"
+                >
+                    <MessageCircle className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition" />
+                    <span className="text-sm font-bold text-gray-400 group-hover:text-white">
+                        {commentCount}
+                    </span>
+                </button>
+            </div>
+        </motion.div>
     );
 }

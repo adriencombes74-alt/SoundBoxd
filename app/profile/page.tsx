@@ -37,6 +37,8 @@ export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState<'reviews' | 'lists' | 'likes'>('reviews');
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+    const [showAboutSubmenu, setShowAboutSubmenu] = useState(false);
 
     // --- LOGIQUE (Identique à l'original) ---
     const fetchUserProfile = async (userId: string, email: string) => {
@@ -186,7 +188,165 @@ export default function ProfilePage() {
             </div>
 
             {/* --- HEADER PROFIL --- */}
-            <header className="relative pt-12 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 z-10">
+            <header className="relative pt-12 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 z-50">
+                {/* Bouton Paramètres en haut à droite */}
+                <div className="absolute top-4 right-4 md:top-8 md:right-8 z-[100]">
+                    <div className="relative">
+                        <motion.button
+                            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                            className="group relative w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 hover:border-[#00e054]/50 transition-all duration-300 flex items-center justify-center shadow-lg"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                        >
+                            <span className="text-lg md:text-xl group-hover:rotate-90 transition-transform duration-500">⚙️</span>
+                        </motion.button>
+
+                        {/* Menu Déroulant */}
+                        <AnimatePresence>
+                            {showSettingsMenu && (
+                                <>
+                                    {/* Overlay pour fermer le menu */}
+                                    <div
+                                        className="fixed inset-0 z-[90]"
+                                        onClick={() => {
+                                            setShowSettingsMenu(false);
+                                            setShowAboutSubmenu(false);
+                                        }}
+                                    />
+
+                                    {/* Menu */}
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                        transition={{ type: "spring", duration: 0.3 }}
+                                        className="absolute top-14 md:top-16 right-0 w-64 bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-visible z-[100]"
+                                    >
+                                        {/* Header Menu */}
+                                        <div className="px-4 py-3 border-b border-white/5 bg-gradient-to-br from-white/5 to-transparent">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00e054] to-blue-600 flex items-center justify-center">
+                                                    {profile?.avatar_url ? (
+                                                        <img src={profile.avatar_url} className="w-full h-full object-cover rounded-full" alt="Avatar" />
+                                                    ) : (
+                                                        <span className="text-white font-bold text-lg">
+                                                            {user?.email[0].toUpperCase()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-white truncate">{profile?.username}</p>
+                                                    <p className="text-xs text-white/50 truncate">{user?.email}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Menu Items */}
+                                        <div className="py-2 overflow-visible">
+                                            <button
+                                                onClick={() => {
+                                                    setIsEditing(true);
+                                                    setShowSettingsMenu(false);
+                                                }}
+                                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                                            >
+                                                <span className="text-lg group-hover:scale-110 transition-transform">⚙️</span>
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-sm font-semibold text-white group-hover:text-[#00e054] transition-colors">Paramètres</p>
+                                                    <p className="text-xs text-white/40">Modifier votre profil</p>
+                                                </div>
+                                            </button>
+
+
+                                            {/* À propos avec sous-menu */}
+                                            <div className="relative z-[105]">
+                                                <button
+                                                    onClick={() => setShowAboutSubmenu(!showAboutSubmenu)}
+                                                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                                                >
+                                                    <span className="text-lg group-hover:scale-110 transition-transform">ℹ️</span>
+                                                    <div className="flex-1 text-left">
+                                                        <p className="text-sm font-semibold text-white group-hover:text-[#00e054] transition-colors">À propos</p>
+                                                        <p className="text-xs text-white/40">Informations légales</p>
+                                                    </div>
+                                                    <motion.span
+                                                        animate={{ rotate: showAboutSubmenu ? 90 : 0 }}
+                                                        transition={{ duration: 0.2 }}
+                                                        className="text-white/40 text-sm"
+                                                    >
+                                                        ›
+                                                    </motion.span>
+                                                </button>
+
+                                                {/* Sous-menu À propos */}
+                                                <AnimatePresence>
+                                                    {showAboutSubmenu && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, height: 0 }}
+                                                            animate={{ opacity: 1, height: 'auto' }}
+                                                            exit={{ opacity: 0, height: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="bg-white/5 rounded-lg mx-2 my-1 overflow-hidden relative z-[110]"
+                                                        >
+                                                            <Link
+                                                                href="/cgu"
+                                                                onClick={() => setShowSettingsMenu(false)}
+                                                                className="block px-4 py-2.5 hover:bg-white/5 transition-colors group"
+                                                            >
+                                                                <p className="text-sm text-white/80 group-hover:text-white transition-colors pl-6">
+                                                                    📜 Conditions d'utilisation
+                                                                </p>
+                                                            </Link>
+                                                            <Link
+                                                                href="/confidentialite"
+                                                                onClick={() => setShowSettingsMenu(false)}
+                                                                className="block px-4 py-2.5 hover:bg-white/5 transition-colors group"
+                                                            >
+                                                                <p className="text-sm text-white/80 group-hover:text-white transition-colors pl-6">
+                                                                    🔒 Confidentialité
+                                                                </p>
+                                                            </Link>
+                                                            <Link
+                                                                href="/about"
+                                                                onClick={() => setShowSettingsMenu(false)}
+                                                                className="block px-4 py-2.5 hover:bg-white/5 transition-colors group"
+                                                            >
+                                                                <p className="text-sm text-white/80 group-hover:text-white transition-colors pl-6">
+                                                                    💡 À propos de nous
+                                                                </p>
+                                                            </Link>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        </div>
+
+                                        {/* Séparateur */}
+                                        <div className="h-px bg-white/5" />
+
+                                        {/* Déconnexion */}
+                                        <div className="py-2">
+                                            <button
+                                                onClick={() => {
+                                                    handleSignOut();
+                                                    setShowSettingsMenu(false);
+                                                }}
+                                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/10 transition-colors group"
+                                            >
+                                                <span className="text-lg group-hover:scale-110 transition-transform">🚪</span>
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-sm font-semibold text-red-400 group-hover:text-red-300 transition-colors">Déconnexion</p>
+                                                    <p className="text-xs text-white/40">Se déconnecter du compte</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
+
                 <div className="max-w-4xl mx-auto flex flex-col items-center md:items-end md:flex-row gap-6 md:gap-10">
 
                     {/* Avatar (Glass Container) */}

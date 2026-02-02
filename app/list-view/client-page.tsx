@@ -41,6 +41,12 @@ export default function ListDetailsClientPage() {
   const [reviewText, setReviewText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Share to Feed Modal
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareCaption, setShareCaption] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [isAlreadyShared, setIsAlreadyShared] = useState(false);
+
   const showToast = (msg: string, type: ToastType = 'info') => {
     setToast({ msg, type, visible: true });
   };
@@ -85,6 +91,18 @@ export default function ListDetailsClientPage() {
       .single();
 
     setOwner(ownerData || { username: 'Inconnu' });
+
+    // Vérifier si la liste est déjà partagée
+    if (user) {
+      const { data: existingPost } = await supabase
+        .from('list_posts')
+        .select('id')
+        .eq('list_id', listId)
+        .maybeSingle();
+
+      setIsAlreadyShared(!!existingPost);
+    }
+
     setLoading(false);
   };
 
@@ -442,6 +460,62 @@ export default function ListDetailsClientPage() {
     }
   };
 
+  const handleShareToFeed = async () => {
+    if (!currentUser) {
+      showToast("Connectez-vous pour partager !", "error");
+      return;
+    }
+
+    if (currentUser.id !== list.user_id) {
+      showToast("Seul le propriétaire peut partager cette liste !", "error");
+      return;
+    }
+
+    setIsSharing(true);
+
+    try {
+      // Vérifier si déjà partagée
+      const { data: existingPost } = await supabase
+        .from('list_posts')
+        .select('id')
+        .eq('list_id', listId)
+        .maybeSingle();
+
+      if (existingPost) {
+        showToast("Cette liste est déjà partagée sur la communauté !", "error");
+        setIsSharing(false);
+        return;
+      }
+
+      // Créer le post
+      const { error } = await supabase
+        .from('list_posts')
+        .insert({
+          user_id: currentUser.id,
+          list_id: listId,
+          caption: shareCaption.trim() || null
+        });
+
+      if (error) throw error;
+
+      showToast("Liste partagée sur la communauté ! 🎉", "success");
+      setShowShareModal(false);
+      setShareCaption("");
+      setIsAlreadyShared(true);
+
+      // Rediriger vers la communauté
+      setTimeout(() => {
+        router.push('/community?tab=feed');
+      }, 1500);
+
+    } catch (error) {
+      console.error('Erreur partage:', error);
+      showToast("Erreur lors du partage", "error");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   if (loading) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Chargement...</div>;
   if (!list) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Liste introuvable.</div>;
 
@@ -509,8 +583,24 @@ export default function ListDetailsClientPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:gap-4 justify-center mt-2 md:mt-10 w-full">
-            <button onClick={handleShare} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Partager 🔗</button>
-            <button onClick={handleExportCSV} className="px-4 md:px-6 py-2 md:py-3 bg-[#00e054]/10 hover:bg-[#00e054]/20 text-[#00e054] rounded-xl border border-[#00e054]/20 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Exporter CSV 📄</button>
+            {currentUser && currentUser.id === list.user_id && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className={`px-4 md:px-6 py-2 md:py-3 rounded-xl border transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105 ${isAlreadyShared
+                  ? 'bg-[#00e054]/20 text-[#00e054] border-[#00e054]/30 cursor-default'
+                  : 'bg-[#00e054]/10 hover:bg-[#00e054]/20 text-[#00e054] border-[#00e054]/20'
+                  }`}
+                disabled={isAlreadyShared}
+              >
+                {isAlreadyShared ? (
+                  <><Check className="w-3 h-3 md:w-4 md:h-4" /> Partagée</>
+                ) : (
+                  <>Partager sur la Communauté 🌟</>
+                )}
+              </button>
+            )}
+            <button onClick={handleShare} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Copier le Lien 🔗</button>
+            <button onClick={handleExportCSV} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Exporter CSV 📄</button>
             {currentUser && currentUser.id === list.user_id && (
               <>
                 <button onClick={handleEdit} className="px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/10 transition text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:scale-105">Modifier ✎</button>
@@ -864,6 +954,82 @@ export default function ListDetailsClientPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODALE PARTAGE SUR LA COMMUNAUTÉ */}
+      <AnimatePresence>
+        {showShareModal && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-black/80 backdrop-blur-xl"
+              onClick={() => setShowShareModal(false)}
+            />
+            <motion.div
+              className="relative bg-[#121212] border border-white/10 rounded-3xl w-full max-w-md p-6 md:p-8"
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-black text-white">Partager sur la Communauté</h3>
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-6">
+                Partagez cette liste avec la communauté MusicBoxd. Vos amis pourront la découvrir dans leur feed !
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase ml-3 block mb-2">Légende (optionnel)</label>
+                  <textarea
+                    className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-white focus:border-[#00e054] outline-none transition resize-none h-24 text-sm placeholder-gray-600"
+                    placeholder="Ajoutez un commentaire sur cette liste..."
+                    value={shareCaption}
+                    onChange={(e) => setShareCaption(e.target.value)}
+                    maxLength={500}
+                  />
+                  <div className="text-xs text-gray-600 mt-1 ml-3">
+                    {shareCaption.length}/500 caractères
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowShareModal(false)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl transition font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleShareToFeed}
+                  disabled={isSharing}
+                  className="flex-1 bg-[#00e054] hover:bg-[#00c04b] text-black py-3 rounded-xl transition font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-900/20"
+                >
+                  {isSharing ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="inline-block w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                      Partage...
+                    </span>
+                  ) : (
+                    'Partager 🌟'
+                  )}
+                </button>
               </div>
             </motion.div>
           </motion.div>

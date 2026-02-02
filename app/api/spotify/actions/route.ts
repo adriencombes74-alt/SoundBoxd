@@ -40,7 +40,7 @@ async function searchTrack(query: string, accessToken: string) {
   const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`, {
     headers: { 'Authorization': `Bearer ${accessToken}` }
   });
-  
+
   const data = await res.json();
   if (data.tracks && data.tracks.items.length > 0) {
     return data.tracks.items[0];
@@ -78,11 +78,11 @@ export async function POST(request: Request) {
       try {
         const tokenData = await refreshSpotifyToken(integration.refresh_token);
         accessToken = tokenData.access_token;
-        
+
         // Update DB
         const newExpiresAt = new Date();
         newExpiresAt.setSeconds(newExpiresAt.getSeconds() + tokenData.expires_in);
-        
+
         await supabase
           .from('user_integrations')
           .update({
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString()
           })
           .eq('id', integration.id);
-          
+
       } catch (e) {
         console.error("Token refresh failed", e);
         return NextResponse.json({ error: 'Token expired and refresh failed' }, { status: 401 });
@@ -100,52 +100,52 @@ export async function POST(request: Request) {
 
     // 3. Handle Actions
     if (action === 'getPlaylists') {
-        const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        const data = await res.json();
-        return NextResponse.json({ success: true, playlists: data.items });
+      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      const data = await res.json();
+      return NextResponse.json({ success: true, playlists: data.items });
     }
 
     // For Like and AddToPlaylist, we need the track URI first
     if (!query) {
-        return NextResponse.json({ error: 'Missing query for track search' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing query for track search' }, { status: 400 });
     }
 
     const track = await searchTrack(query, accessToken);
     if (!track) {
-        return NextResponse.json({ error: 'Track not found on Spotify' }, { status: 404 });
+      return NextResponse.json({ error: 'Track not found on Spotify' }, { status: 404 });
     }
 
     if (action === 'like') {
-        const res = await fetch(`https://api.spotify.com/v1/me/tracks?ids=${track.id}`, {
-            method: 'PUT',
-            headers: { 
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!res.ok) throw new Error('Failed to like track');
-        return NextResponse.json({ success: true, track: track.name });
+      const res = await fetch(`https://api.spotify.com/v1/me/tracks?ids=${track.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error('Failed to like track');
+      return NextResponse.json({ success: true, track: track.name });
     }
 
     if (action === 'addToPlaylist') {
-        if (!playlistId) return NextResponse.json({ error: 'Missing playlistId' }, { status: 400 });
+      if (!playlistId) return NextResponse.json({ error: 'Missing playlistId' }, { status: 400 });
 
-        const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-            method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                uris: [track.uri]
-            })
-        });
+      const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uris: [track.uri]
+        })
+      });
 
-        if (!res.ok) throw new Error('Failed to add to playlist');
-        return NextResponse.json({ success: true, playlistId });
+      if (!res.ok) throw new Error('Failed to add to playlist');
+      return NextResponse.json({ success: true, playlistId });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

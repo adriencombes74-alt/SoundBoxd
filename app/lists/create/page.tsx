@@ -456,7 +456,7 @@ export default function CreateListPage() {
       </div>
 
       {/* Floating Publish Button */}
-      <div className="fixed bottom-6 md:bottom-8 left-0 right-0 flex justify-center items-center z-40 px-4">
+      <div className="fixed bottom-20 md:bottom-8 left-0 right-0 flex justify-center items-center z-40 px-4">
         <button
           onClick={saveList}
           disabled={isSaving || selectedItems.length === 0}

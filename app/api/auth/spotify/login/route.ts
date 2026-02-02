@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
-  
+
   if (!clientId || !redirectUri) {
     return NextResponse.json({ error: 'Spotify configuration missing' }, { status: 500 });
   }
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   // Format simple : randomString:userId
   const randomPart = crypto.randomUUID();
   const state = `${randomPart}:${userId}`;
-  
+
   const scope = 'user-read-currently-playing user-library-modify playlist-modify-public';
 
   const params = new URLSearchParams({
