@@ -314,22 +314,14 @@ export default function Home() {
             </div>
 
             {/* HERO */}
-            <header className="relative pt-12 md:pt-40 pb-8 md:pb-10 px-4 md:px-6 flex flex-col items-center text-center z-10">
+            <header className="relative pt-12 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 flex flex-col items-center text-center z-10">
                 <h1 className="text-3xl md:text-5xl lg:text-8xl font-black tracking-tight mb-4 md:mb-6 leading-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-gray-200 to-gray-600 drop-shadow-2xl">
                     <span className="block md:inline">VOTRE VIE EN</span> <br className="md:hidden" /><span className="text-[#00e054]">MUSIQUE.</span>
                 </h1>
 
-                <p className="text-base md:text-lg text-gray-400 max-w-sm md:max-w-xl mb-6 md:mb-8 font-light px-2">
+                <p className="text-base md:text-lg text-gray-400 max-w-sm md:max-w-xl font-light px-2">
                     Notez vos albums, écrivez des critiques et découvrez de nouvelles pépites grâce à la communauté.
                 </p>
-
-                <div className="w-full max-w-sm md:max-w-md relative group mb-6 md:mb-8">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00e054] to-emerald-600 rounded-full blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
-                    <Link href="/search" className="relative flex items-center bg-black rounded-full px-4 md:px-6 py-3 md:py-4 w-full hover:bg-[#111] transition">
-                        <span className="text-gray-500 mr-2 md:mr-3 text-lg">🔍</span>
-                        <span className="text-gray-400 text-xs md:text-sm">Chercher un album, un artiste...</span>
-                    </Link>
-                </div>
             </header>
 
             <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 relative z-10 space-y-12 md:space-y-20">

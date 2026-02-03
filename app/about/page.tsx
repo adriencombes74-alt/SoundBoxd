@@ -23,44 +23,44 @@ export default function AboutPage() {
       </nav>
 
       {/* Content */}
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-16">
+      <main className="relative z-10 max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-16 pb-24 md:pb-16">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 p-8 md:p-12 shadow-2xl"
+          className="bg-white/5 backdrop-blur-2xl rounded-2xl md:rounded-3xl border border-white/10 p-5 md:p-12 shadow-2xl"
         >
-          <div className="flex items-center gap-4 mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00e054] to-purple-600 flex items-center justify-center text-3xl shadow-lg">
+          <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br from-[#00e054] to-purple-600 flex items-center justify-center text-2xl md:text-3xl shadow-lg">
               💡
             </div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60">
+              <h1 className="text-xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60">
                 À Propos de MusicBoxd
               </h1>
               <p className="text-white/40 text-sm mt-1">Votre réseau social musical</p>
             </div>
           </div>
 
-          <div className="space-y-8 text-white/80 leading-relaxed">
+          <div className="space-y-6 md:space-y-8 text-white/80 leading-relaxed">
             <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4 flex items-center gap-2 md:gap-3">
                 <span className="w-1 h-8 bg-[#00e054] rounded-full"></span>
                 Notre Mission
               </h2>
-              <p className="text-lg">
+              <p className="text-base md:text-lg">
                 MusicBoxd est une plateforme sociale dédiée aux passionnés de musique.
                 Notre mission est de créer un espace où vous pouvez découvrir, partager et célébrer votre amour pour la musique.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4 flex items-center gap-2 md:gap-3">
                 <span className="w-1 h-8 bg-[#00e054] rounded-full"></span>
                 Ce que nous offrons
               </h2>
-              <div className="grid md:grid-cols-2 gap-4 mt-6">
-                <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-4 md:mt-6">
+                <div className="bg-white/5 backdrop-blur-xl rounded-xl md:rounded-2xl p-4 md:p-6 border border-white/10">
                   <span className="text-3xl mb-3 block">🎵</span>
                   <h3 className="text-lg font-bold text-white mb-2">Découverte Musicale</h3>
                   <p className="text-sm text-white/60">
@@ -92,14 +92,14 @@ export default function AboutPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4 flex items-center gap-2 md:gap-3">
                 <span className="w-1 h-8 bg-[#00e054] rounded-full"></span>
                 Technologies
               </h2>
               <p className="mb-4">
                 MusicBoxd est construit avec les technologies modernes suivantes :
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
                 {['Next.js', 'React', 'Supabase', 'TypeScript', 'Framer Motion', 'Tailwind CSS', 'iTunes API', 'Spotify API'].map((tech) => (
                   <div key={tech} className="bg-white/5 backdrop-blur-xl rounded-lg px-4 py-3 border border-white/10 text-center">
                     <span className="text-sm font-semibold text-white/80">{tech}</span>
@@ -109,11 +109,11 @@ export default function AboutPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4 flex items-center gap-2 md:gap-3">
                 <span className="w-1 h-8 bg-[#00e054] rounded-full"></span>
                 Contact
               </h2>
-              <div className="bg-gradient-to-br from-[#00e054]/10 to-purple-600/10 backdrop-blur-xl rounded-2xl p-6 border border-[#00e054]/20">
+              <div className="bg-gradient-to-br from-[#00e054]/10 to-purple-600/10 backdrop-blur-xl rounded-xl md:rounded-2xl p-4 md:p-6 border border-[#00e054]/20">
                 <p className="text-white/80 mb-4">
                   Vous avez des questions, des suggestions ou besoin d'aide ?
                 </p>
@@ -122,7 +122,7 @@ export default function AboutPage() {
                     <span className="text-2xl">📧</span>
                     <div>
                       <p className="text-sm text-white/50">Email</p>
-                      <p className="text-white font-semibold">contact@musicboxd.app</p>
+                      <a href="mailto:adriencombesdev@gmail.com" className="text-white font-semibold hover:text-[#00e054] transition">adriencombesdev@gmail.com</a>
                     </div>
                   </div>
                 </div>

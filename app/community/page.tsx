@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import ProfileMenu from '@/components/ui/profile-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Check, Plus, Share2 } from 'lucide-react';
+import PullToRefresh from '@/components/ui/pull-to-refresh';
+import { Skeleton } from '@/components/ui/skeleton';
+import { hapticLike, hapticMenu } from '@/lib/haptic';
+import { useDoubleTap } from '@/hooks/useDoubleTap';
 
 export default function CommunityPage() {
     const [user, setUser] = useState<any>(null);
@@ -287,7 +292,10 @@ export default function CommunityPage() {
                 </nav>
             </div>
 
-            <div className="relative z-10 max-w-5xl mx-auto px-4 md:px-6 pt-20 md:pt-32 lg:pt-40 pb-12 md:pb-20">
+            <PullToRefresh
+                onRefresh={fetchFeed}
+                className="relative z-10 max-w-5xl mx-auto px-4 md:px-6 pt-20 md:pt-32 lg:pt-40 pb-12 md:pb-20 min-h-screen"
+            >
                 <div className="text-center mb-8 md:mb-12">
                     <h1 className="text-3xl md:text-5xl lg:text-6xl font-black mb-4 md:mb-6 tracking-tight text-white">
                         Feed <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00e054] to-emerald-500">Communautaire</span>
@@ -312,7 +320,24 @@ export default function CommunityPage() {
                 {/* FEED */}
                 <div className="space-y-6">
                     {feedLoading ? (
-                        <div className="text-center py-20 text-gray-500">Chargement du feed...</div>
+                        <div className="space-y-6">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="bg-[#121212] rounded-3xl border border-white/5 p-6">
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <Skeleton className="w-12 h-12 rounded-full skeleton-shimmer" />
+                                        <div className="flex-1 space-y-2">
+                                            <Skeleton className="h-4 w-32 skeleton-shimmer" />
+                                            <Skeleton className="h-3 w-20 skeleton-shimmer" />
+                                        </div>
+                                    </div>
+                                    <Skeleton className="h-40 w-full rounded-2xl skeleton-shimmer mb-4" />
+                                    <div className="flex gap-4">
+                                        <Skeleton className="h-8 w-16 rounded-full skeleton-shimmer" />
+                                        <Skeleton className="h-8 w-16 rounded-full skeleton-shimmer" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : posts.length === 0 ? (
                         <div className="text-center py-20 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
                             <p className="text-gray-500 mb-4">Aucune liste partagée pour le moment.</p>
@@ -330,7 +355,7 @@ export default function CommunityPage() {
                         ))
                     )}
                 </div>
-            </div>
+            </PullToRefresh>
 
             {/* MODALE COMMENTAIRES */}
             <AnimatePresence>
@@ -554,8 +579,11 @@ export default function CommunityPage() {
 function ListPostCard({ post, isLiked, onLike, onComment }: any) {
     const list = post.lists;
     const author = post.profiles;
+    const router = useRouter();
 
     const albumCovers = list?.albums?.slice(0, 9).map((album: any) => album.image) || [];
+
+    const [showHeartAnimation, setShowHeartAnimation] = useState(false);
 
     const [likeCount, setLikeCount] = useState(0);
     const [commentCount, setCommentCount] = useState(0);
@@ -588,6 +616,22 @@ function ListPostCard({ post, isLiked, onLike, onComment }: any) {
         }
     }, [post.like_count, post.comment_count]);
 
+    const handleDoubleTapLike = () => {
+        hapticLike();
+        if (!isLiked) {
+            onLike();
+        }
+        // Show heart animation
+        setShowHeartAnimation(true);
+        setTimeout(() => setShowHeartAnimation(false), 800);
+    };
+
+    const handleTap = useDoubleTap({
+        onSingleTap: () => router.push(`/list-view?id=${list?.id}`),
+        onDoubleTap: handleDoubleTapLike,
+        delay: 250
+    });
+
     return (
         <motion.div
             className="bg-[#121212] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition"
@@ -617,7 +661,10 @@ function ListPostCard({ post, isLiked, onLike, onComment }: any) {
                 </div>
             </div>
 
-            <Link href={`/list-view?id=${list?.id}`} className="block">
+            <div
+                onClick={handleTap}
+                className="block cursor-pointer relative"
+            >
                 <div className={`grid gap-0.5 p-4 bg-gradient-to-br from-purple-900/20 to-green-900/10 ${albumCovers.length === 1 ? 'grid-cols-1' :
                     albumCovers.length <= 4 ? 'grid-cols-2' :
                         'grid-cols-3'
@@ -632,7 +679,22 @@ function ListPostCard({ post, isLiked, onLike, onComment }: any) {
                         </div>
                     ))}
                 </div>
-            </Link>
+
+                {/* Double-tap heart animation */}
+                <AnimatePresence>
+                    {showHeartAnimation && (
+                        <motion.div
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 1.5, opacity: 0 }}
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                        >
+                            <Heart className="w-24 h-24 fill-red-500 text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.8)]" />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
             <div className="p-4 border-t border-white/5">
                 <Link href={`/list-view?id=${list?.id}`}>
@@ -646,7 +708,10 @@ function ListPostCard({ post, isLiked, onLike, onComment }: any) {
 
             <div className="p-4 border-t border-white/5 flex items-center gap-6">
                 <button
-                    onClick={onLike}
+                    onClick={() => {
+                        hapticLike();
+                        onLike();
+                    }}
                     className="flex items-center gap-2 group"
                 >
                     <Heart

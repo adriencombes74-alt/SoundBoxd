@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ProfileMenu from '@/components/ui/profile-menu';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageTransition from '@/components/ui/page-transition';
 
 export default function ArtistClientPage() {
   const router = useRouter();
@@ -71,14 +73,29 @@ export default function ArtistClientPage() {
     setLoading(false);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Chargement de l'artiste...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#050505] pb-20 overflow-x-hidden">
+      {/* Hero Skeleton */}
+      <div className="relative h-[60vh] w-full bg-[#1a1a1a]">
+        <Skeleton className="absolute inset-0 w-full h-full skeleton-shimmer" />
+      </div>
+      <div className="max-w-6xl mx-auto px-6 relative z-10 -mt-32 space-y-8">
+        <Skeleton className="h-12 w-1/2 md:w-1/3 skeleton-shimmer" />
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          {[1, 2, 3, 4, 5].map(i => (
+            <Skeleton key={i} className="aspect-square rounded-2xl skeleton-shimmer" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (!artistInfo) return <div className="min-h-screen bg-[#050505] text-white p-10 flex items-center justify-center">Artiste introuvable.</div>;
 
   // Image HD pour le fond
   const heroImage = albums.length > 0 ? albums[0].artworkUrl100.replace('100x100', '1000x1000') : '';
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
+    <PageTransition className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
 
       {/* --- GLOWS D'AMBIANCE --- */}
       <div className="fixed top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full pointer-events-none z-0" />
@@ -200,7 +217,7 @@ export default function ArtistClientPage() {
         </div>
 
       </main>
-    </div>
+    </PageTransition>
   );
 }
 

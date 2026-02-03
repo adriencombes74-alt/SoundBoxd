@@ -9,6 +9,8 @@ import ProfileMenu from '@/components/ui/profile-menu';
 import ListenMenu from '@/components/ui/listen-menu';
 import { Toast, ToastType } from '@/components/ui/toast';
 import { Heart, ListPlus, Check } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageTransition from '@/components/ui/page-transition';
 
 export default function AlbumClientPage() {
   const router = useRouter();
@@ -370,7 +372,25 @@ export default function AlbumClientPage() {
     }
   };
 
-  if (loading || !albumId) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white">Chargement...</div>;
+  if (loading || !albumId) return (
+    <div className="min-h-screen bg-[#050505] p-6 pt-24 md:pt-32 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Left Column Skeleton */}
+      <div className="lg:col-span-4 flex flex-col items-center">
+        <Skeleton className="w-64 h-64 md:w-80 md:h-80 rounded-xl shadow-2xl mb-6 skeleton-shimmer" />
+        <Skeleton className="w-3/4 h-8 mb-2 skeleton-shimmer" />
+        <Skeleton className="w-1/2 h-6 skeleton-shimmer" />
+      </div>
+      {/* Right Column Skeleton */}
+      <div className="lg:col-span-8 space-y-6">
+        <Skeleton className="w-full h-12 rounded-xl skeleton-shimmer" />
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map(i => (
+            <Skeleton key={i} className="w-full h-16 rounded-xl skeleton-shimmer" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (!album) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white">Erreur.</div>;
 
   const highResImage = album.artworkUrl100.replace('100x100', '1000x1000');
@@ -382,7 +402,7 @@ export default function AlbumClientPage() {
   const appleMusicUrl = album.collectionViewUrl;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
+    <PageTransition className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
 
       <Toast
         message={toast.msg}
@@ -518,20 +538,20 @@ export default function AlbumClientPage() {
               const trackAvg = getAverageRating(track.trackId);
               return (
                 <div key={track.trackId} className={`flex items-center gap-2 md:gap-3 p-2 md:p-4 rounded-xl md:rounded-2xl transition group border ${playingTrack === track.trackId.toString()
-                    ? 'bg-[#00e054]/10 border-[#00e054]/30'
-                    : 'hover:bg-white/5 border-transparent hover:border-white/5'
+                  ? 'bg-[#00e054]/10 border-[#00e054]/30'
+                  : 'hover:bg-white/5 border-transparent hover:border-white/5'
                   }`}>
                   <span className={`w-6 md:w-8 font-mono text-xs md:text-sm font-bold flex-shrink-0 ${playingTrack === track.trackId.toString()
-                      ? 'text-[#00e054]'
-                      : 'text-gray-600 group-hover:text-[#00e054]'
+                    ? 'text-[#00e054]'
+                    : 'text-gray-600 group-hover:text-[#00e054]'
                     }`}>{index + 1}</span>
 
                   <div className="flex-1 min-w-0">
                     <button
                       onClick={() => handlePlayTrack(track)}
                       className={`font-bold truncate text-sm md:text-lg text-left hover:cursor-pointer w-full ${playingTrack === track.trackId.toString()
-                          ? 'text-[#00e054]'
-                          : 'text-gray-300 group-hover:text-white'
+                        ? 'text-[#00e054]'
+                        : 'text-gray-300 group-hover:text-white'
                         }`}
                       title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
                     >
@@ -575,8 +595,8 @@ export default function AlbumClientPage() {
                     <motion.button
                       onClick={() => handlePlayTrack(track)}
                       className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${playingTrack === track.trackId.toString()
-                          ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)]'
-                          : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)]'
+                        ? 'bg-[#00e054] text-black shadow-[0_0_20px_rgba(0,224,84,0.4)]'
+                        : 'bg-white/10 text-white hover:bg-[#00e054] hover:text-black hover:shadow-[0_0_15px_rgba(0,224,84,0.3)]'
                         }`}
                       title={playingTrack === track.trackId.toString() ? "Arrêter" : "Écouter un extrait"}
                       whileHover={{ scale: 1.1 }}
@@ -694,8 +714,8 @@ export default function AlbumClientPage() {
                     onClick={() => setUserRating(star)}
                     onMouseEnter={() => setUserRating(star)}
                     className={`text-4xl md:text-5xl focus:outline-none ${star <= userRating
-                        ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]'
-                        : 'text-gray-700 hover:text-gray-500'
+                      ? 'text-[#00e054] drop-shadow-[0_0_15px_rgba(0,224,84,0.6)]'
+                      : 'text-gray-700 hover:text-gray-500'
                       }`}
                     initial={{ opacity: 0, scale: 0, rotate: -180 }}
                     animate={{
@@ -765,8 +785,8 @@ export default function AlbumClientPage() {
                   onClick={handleSaveReview}
                   disabled={isSaving || userRating === 0}
                   className={`flex-1 py-3 font-black rounded-xl uppercase tracking-widest text-sm transition-all ${userRating > 0
-                      ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20'
-                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    ? 'bg-[#00e054] text-black hover:bg-[#00c04b] shadow-lg shadow-[#00e054]/20'
+                    : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                     }`}
                   whileHover={userRating > 0 ? { scale: 1.02 } : {}}
                   whileTap={userRating > 0 ? { scale: 0.98 } : {}}
@@ -840,6 +860,6 @@ export default function AlbumClientPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </PageTransition>
   );
 }

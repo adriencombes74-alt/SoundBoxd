@@ -9,6 +9,7 @@ import AddToPlaylistModal from '@/components/ui/add-to-playlist-modal';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { syncContactsToBackend } from '@/lib/contacts';
 import { Capacitor } from '@capacitor/core';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Variants d'animation
 const containerVariants: Variants = {
@@ -931,20 +932,22 @@ function SearchContent() {
               )}
 
               {loading ? (
-                <motion.div
-                  className="text-center py-20"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                <div
+                  className={`grid gap-4 md:gap-6 ${searchType === 'song'
+                    ? 'grid-cols-1 md:grid-cols-2'
+                    : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'
+                    }`}
                 >
-                  <motion.div
-                    className="inline-block text-4xl"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  >
-                    🔍
-                  </motion.div>
-                  <p className="mt-4 text-gray-400">Recherche en cours...</p>
-                </motion.div>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+                    <div key={i} className="space-y-3">
+                      <Skeleton className="aspect-square rounded-2xl w-full skeleton-shimmer" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
+                        <Skeleton className="h-3 w-1/2 skeleton-shimmer" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : results.length === 0 ? (
                 <motion.div
                   className="text-center py-20"

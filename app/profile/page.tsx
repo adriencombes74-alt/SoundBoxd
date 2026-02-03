@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageTransition from '@/components/ui/page-transition';
 import ProfileMenu from '@/components/ui/profile-menu';
 import Vinyl from '@/components/Vinyl';
 import TiltCard from '@/components/ui/tilt-card';
@@ -144,13 +146,46 @@ export default function ProfilePage() {
     const handleDeleteReview = async (id: number) => { if (!confirm("Supprimer ?")) return; setDeletingId(id); await supabase.from('reviews').delete().eq('id', id); setReviews(reviews.filter(r => r.id !== id)); setDeletingId(null); };
     const handleSignOut = async () => { await supabase.auth.signOut(); router.push('/'); };
 
-    if (loading) return <div className="min-h-screen bg-[#080808] text-white p-10 flex items-center justify-center">Chargement...</div>;
+    if (loading) return (
+        <div className="min-h-screen bg-[#080808] text-white pb-20 overflow-x-hidden">
+            {/* Banner Skeleton */}
+            <div className="relative h-[70vh] w-full bg-[#1a1a1a]">
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#080808]/60 to-[#080808]" />
+            </div>
+
+            {/* Header Skeleton */}
+            <header className="relative pt-12 md:pt-40 pb-12 md:pb-16 px-4 md:px-6 z-10 -mt-[40vh]">
+                <div className="max-w-4xl mx-auto flex flex-col items-center md:items-end md:flex-row gap-6 md:gap-10">
+                    <Skeleton className="w-32 h-32 md:w-48 md:h-48 rounded-full border-4 border-[#080808] skeleton-shimmer" />
+                    <div className="flex-1 space-y-4 w-full md:w-auto flex flex-col items-center md:items-start">
+                        <Skeleton className="h-8 md:h-12 w-48 md:w-64 skeleton-shimmer" />
+                        <div className="flex gap-2 justify-center md:justify-start">
+                            <Skeleton className="h-8 w-24 rounded-full skeleton-shimmer" />
+                            <Skeleton className="h-8 w-24 rounded-full skeleton-shimmer" />
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            {/* Content Skeleton */}
+            <main className="max-w-5xl mx-auto px-4 md:px-6 relative z-10 space-y-12">
+                <div className="space-y-4">
+                    <Skeleton className="h-6 w-32 skeleton-shimmer" />
+                    <div className="flex gap-4 overflow-hidden">
+                        {[1, 2, 3, 4, 5].map(i => (
+                            <Skeleton key={i} className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 rounded-lg skeleton-shimmer" />
+                        ))}
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
 
     // L'image de fond est le 1er album du top, ou une image par défaut
     const bannerImage = topAlbums.length > 0 ? topAlbums[0].image?.replace('400x400', '1000x1000') : null;
 
     return (
-        <div className="min-h-screen bg-[#080808] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
+        <PageTransition className="min-h-screen bg-[#080808] text-white font-sans selection:bg-[#00e054] selection:text-black pb-20 overflow-x-hidden">
 
             {/* --- BANNER DYNAMIQUE (GLASS BACKDROP) --- */}
             <div className="absolute top-0 inset-x-0 h-[70vh] w-full z-0 overflow-hidden pointer-events-none">
@@ -806,6 +841,6 @@ export default function ProfilePage() {
                     </div>
                 </div>
             )}
-        </div>
+        </PageTransition>
     );
 }

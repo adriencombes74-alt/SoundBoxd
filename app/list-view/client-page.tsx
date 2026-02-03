@@ -170,7 +170,7 @@ export default function ListDetailsClientPage() {
 
   const handlePlayTrack = async (item: any) => {
     try {
-      const trackId = item.targetId || item.id;
+      const trackId = item.trackId || item.targetId || item.id;
 
       if (playingTrack && playingTrack !== trackId) {
         if (audioElement) {
@@ -619,9 +619,10 @@ export default function ListDetailsClientPage() {
 
         <div className="space-y-2">
           {list.albums?.map((item: any, index: number) => {
-            const trackId = item.targetId || item.id;
+            const trackId = item.trackId || item.targetId || item.id;
+            const linkId = item.collectionId || item.targetId || item.id;
             const isPlaying = playingTrack === trackId;
-            const albumUrl = `/album-view?id=${trackId}`;
+            const albumUrl = `/album-view?id=${linkId}`;
 
             return (
               <div key={index} className={`flex items-center gap-1.5 md:gap-3 p-1.5 md:p-4 rounded-lg md:rounded-2xl transition group border ${isPlaying
