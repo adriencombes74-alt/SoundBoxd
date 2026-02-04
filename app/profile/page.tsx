@@ -292,6 +292,20 @@ export default function ProfilePage() {
                                                 </div>
                                             </button>
 
+                                            <button
+                                                onClick={() => {
+                                                    router.push('/settings/connections');
+                                                    setShowSettingsMenu(false);
+                                                }}
+                                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors group"
+                                            >
+                                                <span className="text-lg group-hover:scale-110 transition-transform">🔗</span>
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-sm font-semibold text-white group-hover:text-[#00e054] transition-colors">Connexions</p>
+                                                    <p className="text-xs text-white/40">Spotify & Deezer</p>
+                                                </div>
+                                            </button>
+
 
                                             {/* À propos avec sous-menu */}
                                             <div className="relative z-[105]">
