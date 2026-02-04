@@ -11,41 +11,37 @@ import { syncContactsToBackend } from '@/lib/contacts';
 import { Capacitor } from '@capacitor/core';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Variants d'animation
+// Variants d'animation - Premium & Subtils
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
+      staggerChildren: 0.03,
+      duration: 0.3,
+      ease: "easeOut"
     }
   }
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    y: 0,
-    scale: 1,
     transition: {
-      type: "spring",
-      stiffness: 300,
-      damping: 24
+      duration: 0.25,
+      ease: "easeOut"
     }
   }
 };
 
 const fadeInUp: Variants = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    y: 0,
     transition: {
-      type: "spring",
-      stiffness: 200,
-      damping: 20
+      duration: 0.3,
+      ease: "easeOut"
     }
   }
 };
@@ -206,7 +202,7 @@ function SearchContent() {
         if (type === 'artist') entity = 'musicArtist';
         if (type === 'song') entity = 'song';
 
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=${entity}&limit=25&country=FR`;
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=${entity}&limit=25`;
         console.log("Fetching:", url);
 
         const res = await fetch(url, { signal: abortControllerRef.current?.signal });

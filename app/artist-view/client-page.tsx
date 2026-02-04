@@ -51,11 +51,25 @@ export default function ArtistClientPage() {
       setArtistInfo(artistData.results[0]);
 
       // 2. Albums (HD)
-      const albumsRes = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=50`);
+      const albumsRes = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=200`);
       const albumsData = await albumsRes.json();
 
       const albumsList = albumsData.results
-        .filter((item: any) => item.wrapperType === 'collection')
+        .filter((item: any) => {
+          // Only include collections (albums)
+          if (item.wrapperType !== 'collection') return false;
+
+          // Exclude explicit Singles by type
+          if (item.collectionType === 'Single') return false;
+
+          // Exclude by name pattern (case-insensitive)
+          const name = item.collectionName || '';
+          if (name.match(/\s-\s(Single|EP)$/i) || name.match(/\((Single|EP)\)$/i)) {
+            return false;
+          }
+
+          return true;
+        })
         .sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
 
       setAlbums(albumsList);

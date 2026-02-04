@@ -123,20 +123,44 @@ export default function AlbumClientPage() {
   const fetchPlaylists = async () => {
     setLoadingPlaylists(true);
     try {
-      const res = await fetch('/api/spotify/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          action: 'getPlaylists'
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPlaylists(data.playlists);
-      } else {
-        showToast("Impossible de charger les playlists", "error");
+      // 1. Fetch local Supabase playlists first
+      const { data: localData } = await supabase
+        .from('lists')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      const localPlaylists = (localData || []).map(playlist => ({
+        ...playlist,
+        isSpotify: false
+      }));
+
+      // 2. Fetch Spotify playlists if connected
+      let spotifyPlaylists: any[] = [];
+      if (spotifyConnected) {
+        try {
+          const res = await fetch('/api/spotify/actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUser.id,
+              action: 'getPlaylists'
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            spotifyPlaylists = data.playlists.map((p: any) => ({
+              ...p,
+              isSpotify: true
+            }));
+          }
+        } catch (error) {
+          console.error("Erreur chargement playlists Spotify:", error);
+        }
       }
+
+      // Combine both sources
+      setPlaylists([...localPlaylists, ...spotifyPlaylists]);
     } catch (error) {
       console.error(error);
       showToast("Erreur lors du chargement des playlists", "error");
@@ -160,26 +184,60 @@ export default function AlbumClientPage() {
     }
   };
 
-  const handleAddToPlaylist = async (playlistId: string) => {
+  const handleAddToPlaylist = async (playlist: any) => {
     if (!selectedTrackForPlaylist) return;
 
     try {
-      const res = await fetch('/api/spotify/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          action: 'addToPlaylist',
-          playlistId,
-          query: `${selectedTrackForPlaylist.trackName} ${selectedTrackForPlaylist.artistName}`
-        })
-      });
+      if (playlist.isSpotify) {
+        // Add to Spotify playlist
+        const res = await fetch('/api/spotify/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            action: 'addToPlaylist',
+            playlistId: playlist.id,
+            query: `${selectedTrackForPlaylist.trackName} ${selectedTrackForPlaylist.artistName}`
+          })
+        });
 
-      if (res.ok) {
-        showToast("Ajouté à la playlist !", "success");
-        setShowPlaylistModal(false);
+        if (res.ok) {
+          showToast(`Ajouté à la playlist Spotify "${playlist.name}" !`, "success");
+          setShowPlaylistModal(false);
+        } else {
+          showToast("Erreur lors de l'ajout", "error");
+        }
       } else {
-        showToast("Erreur lors de l'ajout", "error");
+        // Add to local Supabase playlist
+        const newTrack = {
+          targetId: selectedTrackForPlaylist.trackId || selectedTrackForPlaylist.collectionId,
+          name: selectedTrackForPlaylist.trackName,
+          artist: selectedTrackForPlaylist.artistName,
+          image: selectedTrackForPlaylist.artworkUrl100?.replace('100x100', '400x400'),
+          type: 'song',
+          year: selectedTrackForPlaylist.releaseDate ? new Date(selectedTrackForPlaylist.releaseDate).getFullYear() : null,
+          addedAt: new Date().toISOString()
+        };
+
+        const currentTracks = Array.isArray(playlist.albums) ? playlist.albums : [];
+        const exists = currentTracks.some((t: any) => String(t.targetId) === String(newTrack.targetId));
+
+        if (exists) {
+          showToast('Cette musique est déjà dans la playlist !', "info");
+          return;
+        }
+
+        const updatedTracks = [...currentTracks, newTrack];
+
+        const { error } = await supabase
+          .from('lists')
+          .update({ albums: updatedTracks })
+          .eq('id', playlist.id);
+
+        if (error) throw error;
+
+        showToast(`Ajouté à "${playlist.title}" !`, "success");
+        setShowPlaylistModal(false);
       }
     } catch (error) {
       console.error(error);
@@ -831,22 +889,39 @@ export default function AlbumClientPage() {
               <div className="flex-1 overflow-y-auto p-2">
                 {loadingPlaylists ? (
                   <div className="text-center py-8 text-gray-500">Chargement...</div>
+                ) : playlists.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Aucune playlist trouvée. Créez-en une ou liez Spotify !
+                  </div>
                 ) : (
                   <div className="space-y-1">
                     {playlists.map(playlist => (
                       <button
-                        key={playlist.id}
-                        onClick={() => handleAddToPlaylist(playlist.id)}
+                        key={`${playlist.isSpotify ? 'spotify' : 'local'}-${playlist.id}`}
+                        onClick={() => handleAddToPlaylist(playlist)}
                         className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition text-left group"
                       >
-                        {playlist.images?.[0]?.url ? (
-                          <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" />
+                        {playlist.isSpotify ? (
+                          playlist.images?.[0]?.url ? (
+                            <img src={playlist.images[0].url} className="w-10 h-10 rounded object-cover" alt="" />
+                          ) : (
+                            <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
+                          )
                         ) : (
-                          <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-xs">♫</div>
+                          <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-lg font-bold text-[#00e054]">
+                            {playlist.title?.[0] || '♫'}
+                          </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">{playlist.name}</div>
-                          <div className="text-xs text-gray-500">{playlist.tracks?.total || 0} titres</div>
+                          <div className="font-bold text-sm text-white truncate group-hover:text-[#00e054]">
+                            {playlist.isSpotify ? playlist.name : playlist.title}
+                            {playlist.isSpotify && (
+                              <span className="ml-2 text-[10px] bg-green-600 px-1.5 py-0.5 rounded">Spotify</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {playlist.isSpotify ? `${playlist.tracks?.total || 0} titres` : `${playlist.albums?.length || 0} titres`}
+                          </div>
                         </div>
                         <div className="opacity-0 group-hover:opacity-100 text-[#00e054]">
                           <Check className="w-5 h-5" />
